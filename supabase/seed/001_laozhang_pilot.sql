@@ -1,5 +1,5 @@
 -- Pilot 店家資料：老張麵店
--- Run only after migration 0001. Idempotent by tenant slug/category/product name.
+-- Run only after migration 0001. Re-running this seed updates, rather than duplicates, pilot menu rows.
 begin;
 insert into public.tenants(name,slug,phone,address,currency)
 values ('老張麵店','laozhang','0977-222-138','台北市信義區永吉路30巷158弄1號','TWD')
@@ -44,7 +44,8 @@ insert into public.products(tenant_id,category_id,name,description,price,sort_or
 select t.id,c.id,p.name,p.description,p.price,p.sort_order
 from public.tenants t join p on true join public.categories c on c.tenant_id=t.id and c.name=p.category
 where t.slug='laozhang'
-on conflict do nothing;
+on conflict(tenant_id,category_id,name) do update
+set description=excluded.description,price=excluded.price,sort_order=excluded.sort_order,is_available=true;
 commit;
 
--- 店家自訂選項（待後續 product modifiers schema）：升級燒肉飯 +30 元；加麵 +20 元。
+-- 店家自訂選項尚未建成 modifier schema：升級燒肉飯 +30 元；加麵 +20 元。
