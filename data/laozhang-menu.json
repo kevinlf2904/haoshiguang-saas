@@ -1,0 +1,188 @@
+{
+  "app": "好食光",
+  "tenant": {
+    "name": "老張麵店",
+    "slug": "laozhang",
+    "phone": "0977-222-138",
+    "address": "台北市信義區永吉路30巷158弄1號",
+    "currency": "TWD",
+    "fulfillment": [
+      "外帶",
+      "內用桌號"
+    ],
+    "options": [
+      {
+        "name": "升級燒肉飯",
+        "price_delta": 30
+      },
+      {
+        "name": "加麵",
+        "price_delta": 20
+      }
+    ]
+  },
+  "menu": [
+    {
+      "category": "湯麵類",
+      "name": "海鮮湯麵",
+      "price": 180,
+      "description": "蛋、蝦、蛤、蚵、小卷"
+    },
+    {
+      "category": "湯麵類",
+      "name": "綜合湯麵",
+      "price": 150,
+      "description": "蛤、蚵、肉、豬肝"
+    },
+    {
+      "category": "湯麵類",
+      "name": "餛飩湯麵",
+      "price": 90,
+      "description": ""
+    },
+    {
+      "category": "湯麵類",
+      "name": "酸辣清湯麵",
+      "price": 90,
+      "description": ""
+    },
+    {
+      "category": "乾麵類",
+      "name": "紅油皮蛋抄手麵",
+      "price": 140,
+      "description": ""
+    },
+    {
+      "category": "乾麵類",
+      "name": "麻醬皮蛋抄手麵",
+      "price": 140,
+      "description": ""
+    },
+    {
+      "category": "乾麵類",
+      "name": "紅油抄手麵",
+      "price": 110,
+      "description": ""
+    },
+    {
+      "category": "乾麵類",
+      "name": "麻醬抄手麵",
+      "price": 110,
+      "description": ""
+    },
+    {
+      "category": "乾麵類",
+      "name": "紅油皮蛋麵",
+      "price": 100,
+      "description": ""
+    },
+    {
+      "category": "乾麵類",
+      "name": "麻醬皮蛋麵",
+      "price": 100,
+      "description": ""
+    },
+    {
+      "category": "乾麵類",
+      "name": "餛飩乾麵",
+      "price": 90,
+      "description": ""
+    },
+    {
+      "category": "乾麵類",
+      "name": "紅油酸辣麵",
+      "price": 60,
+      "description": "含花生碎"
+    },
+    {
+      "category": "乾麵類",
+      "name": "麻醬麵",
+      "price": 60,
+      "description": ""
+    },
+    {
+      "category": "湯類",
+      "name": "海鮮湯",
+      "price": 170,
+      "description": "蛋、蝦、蛤、蚵、小卷"
+    },
+    {
+      "category": "湯類",
+      "name": "綜合湯",
+      "price": 140,
+      "description": "蛤、蚵、肉、豬肝"
+    },
+    {
+      "category": "湯類",
+      "name": "餛飩湯",
+      "price": 80,
+      "description": ""
+    },
+    {
+      "category": "湯類",
+      "name": "酸辣清湯",
+      "price": 80,
+      "description": ""
+    },
+    {
+      "category": "湯類",
+      "name": "豬肝湯",
+      "price": 60,
+      "description": ""
+    },
+    {
+      "category": "湯類",
+      "name": "貢丸湯",
+      "price": 40,
+      "description": ""
+    },
+    {
+      "category": "小菜",
+      "name": "紅油抄手",
+      "price": 90,
+      "description": ""
+    },
+    {
+      "category": "小菜",
+      "name": "麻醬抄手",
+      "price": 90,
+      "description": ""
+    },
+    {
+      "category": "小菜",
+      "name": "三色蛋",
+      "price": 60,
+      "description": ""
+    },
+    {
+      "category": "小菜",
+      "name": "粉肝",
+      "price": 60,
+      "description": ""
+    },
+    {
+      "category": "小菜",
+      "name": "鯊魚煙",
+      "price": 60,
+      "description": ""
+    },
+    {
+      "category": "小菜",
+      "name": "燙青菜",
+      "price": 40,
+      "description": ""
+    },
+    {
+      "category": "飯類",
+      "name": "燒肉飯",
+      "price": 70,
+      "description": ""
+    },
+    {
+      "category": "飯類",
+      "name": "白飯",
+      "price": 20,
+      "description": ""
+    }
+  ]
+}
