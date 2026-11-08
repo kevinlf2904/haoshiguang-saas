@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import menuData from "../../../../data/laozhang-menu.json";
 import "./storefront.css";
 
@@ -12,6 +13,7 @@ const money = (value: number) => new Intl.NumberFormat("zh-TW", {
 }).format(value);
 
 export default function StorefrontPage() {
+  const params = useParams<{ slug: string }>();
   const categories = [...new Set(menuData.menu.map((item) => item.category))];
   const [activeCategory, setActiveCategory] = useState(categories[0]);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -44,6 +46,10 @@ export default function StorefrontPage() {
     setCart((current) => current
       .map((line) => line.key === key ? { ...line, quantity: line.quantity + delta } : line)
       .filter((line) => line.quantity > 0));
+  }
+
+  if (params.slug !== menuData.tenant.slug) {
+    return <main className="order-shell"><section className="store-option-note"><strong>找不到這間店</strong><span>請確認店家網址是否正確。</span></section></main>;
   }
 
   return (
