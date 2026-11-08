@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
     return json("請確認訂單資料格式。", 400);
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return json("請確認訂單資料格式。", 400);
+  }
   if (!body.storeSlug || !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(body.storeSlug)) {
     return json("店家網址格式不正確。", 400);
   }
