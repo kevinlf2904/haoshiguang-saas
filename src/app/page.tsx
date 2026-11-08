@@ -8,7 +8,7 @@ export default function HomePage() {
     </section>
     <section className="panel">
       <h2>第一家試點店家：老張麵店</h2>
-      <p className="muted">店家資料與菜單正在建置中。正式啟用前，顧客下單、店家登入及雲端訂單功能尚未開放。</p>
+      <p className="muted">顧客點餐介面已進入開發階段；雲端送單、店家登入及訂單管理仍在建置中。</p><p><a href="/store/laozhang">前往老張麵店點餐介面 →</a></p>
     </section>
   </main>;
 }
