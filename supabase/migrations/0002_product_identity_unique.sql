@@ -1,5 +1,6 @@
 -- Add product identity uniqueness as a forward-only migration.
--- This is safe whether 0001 was applied before or after this PR branch was created.
+-- Safe whether 0001 was applied before or after this PR branch was created.
+-- Recognize the equivalent unnamed constraint from the earlier PR revision too.
 -- Existing duplicate rows are reported rather than deleted or silently changed.
 do $$
 begin
@@ -7,7 +8,8 @@ begin
     select 1
     from pg_constraint
     where conrelid = 'public.products'::regclass
-      and conname = 'products_tenant_category_name_key'
+      and contype = 'u'
+      and pg_get_constraintdef(oid) = 'UNIQUE (tenant_id, category_id, name)'
   ) then
     if exists (
       select 1
