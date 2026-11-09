@@ -14,7 +14,7 @@ function validHours(value: unknown): value is Hours {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   if (Object.keys(record).some(key => !days.includes(key as Day))) return false;
-  for (const [day, slots] of Object.entries(record)) {
+  for (const slots of Object.values(record)) {
     if (!Array.isArray(slots) || slots.length > 2) return false;
     let previousClose = "";
     for (const slot of slots) {
