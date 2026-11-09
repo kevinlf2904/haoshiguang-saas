@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:db": "bash scripts/test-db.sh",
+    "test:url": "node --test scripts/tests/*.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
