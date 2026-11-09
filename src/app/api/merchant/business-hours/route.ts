@@ -50,8 +50,24 @@ export async function PATCH(request: NextRequest) {
       || !Number.isInteger(body.prepTimeMinutes) || Number(body.prepTimeMinutes) < 5 || Number(body.prepTimeMinutes) > 240) {
     return fail("請確認營業時間、公休日、接單狀態及備餐時間。", 400);
   }
+  const validIntervals = (value: unknown): value is Array<{ open: string; close: string }> =>
+    Array.isArray(value) && value.length <= 4 && value.every(slot =>
+      slot && typeof slot === "object" && !Array.isArray(slot)
+      && typeof slot.open === "string" && /^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.open)
+      && typeof slot.close === "string" && /^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.close)
+      && slot.close > slot.open);
   if (!body.weeklyHours || typeof body.weeklyHours !== "object" || Array.isArray(body.weeklyHours)
       || !body.specialHours || typeof body.specialHours !== "object" || Array.isArray(body.specialHours)) return fail("營業時間格式錯誤。", 400);
+  const weekly = body.weeklyHours as Record<string, unknown>;
+  if (Object.keys(weekly).some(day => !/^[0-6]$/.test(day)) || Array.from({length:7},(_,i)=>String(i)).some(day => !validIntervals(weekly[day]))) {
+    return fail("每週營業時段格式錯誤；每一天最多四個時段，且結束時間必須晚於開始時間。", 400);
+  }
+  const special = body.specialHours as Record<string, unknown>;
+  for (const [date, value] of Object.entries(special)) {
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !value || typeof value !== "object" || Array.isArray(value)) return fail("特殊營業日期格式錯誤。", 400);
+    const override = value as { closed?: unknown; intervals?: unknown };
+    if (override.closed !== true && !validIntervals(override.intervals)) return fail("特殊營業日必須設定 closed:true 或有效 intervals。", 400);
+  }
   const { data, error } = await supabase.from("tenants").update({
     weekly_hours: body.weeklyHours, special_hours: body.specialHours,
     accepting_orders: body.acceptingOrders, prep_time_minutes: body.prepTimeMinutes,
