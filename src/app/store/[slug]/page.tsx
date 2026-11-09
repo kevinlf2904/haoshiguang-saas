@@ -85,7 +85,14 @@ export default function StorefrontPage() {
     [cart],
   );
 
+  function invalidateCheckoutAttempt() {
+    if (!idempotencyKey) return;
+    setIdempotencyKey("");
+    window.sessionStorage.removeItem("haoshiguang_checkout_idempotency:" + params.slug);
+  }
+
   function add(item: MenuItem) {
+    invalidateCheckoutAttempt();
     const key = item.id;
     setCart((current) => {
       const found = current.find((line) => line.key === key);
@@ -138,6 +145,7 @@ export default function StorefrontPage() {
   }
 
   function changeQuantity(key: string, delta: number) {
+    invalidateCheckoutAttempt();
     setCart((current) => current
       .map((line) => line.key === key ? { ...line, quantity: line.quantity + delta } : line)
       .filter((line) => line.quantity > 0));
@@ -225,13 +233,13 @@ export default function StorefrontPage() {
           <div className="cart-form">
             <label className="field-label">取餐方式</label>
             <div className="fulfillment-switch">
-              <button className={fulfillment === "takeaway" ? "selected" : ""} onClick={() => setFulfillment("takeaway")}>外帶</button>
-              <button className={fulfillment === "dine_in" ? "selected" : ""} onClick={() => setFulfillment("dine_in")}>內用</button>
+              <button className={fulfillment === "takeaway" ? "selected" : ""} onClick={() => { invalidateCheckoutAttempt(); setFulfillment("takeaway"); }}>外帶</button>
+              <button className={fulfillment === "dine_in" ? "selected" : ""} onClick={() => { invalidateCheckoutAttempt(); setFulfillment("dine_in"); }}>內用</button>
             </div>
-            {fulfillment === "dine_in" && <label className="field-label">桌號<input value={tableLabel} onChange={(event) => setTableLabel(event.target.value)} placeholder="請輸入桌號"/></label>}
-            <label className="field-label">稱呼<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="怎麼稱呼您？"/></label>
-            <label className="field-label">聯絡電話<input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} inputMode="tel" placeholder="方便店家聯絡"/></label>
-            <label className="field-label">備註（選填）<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="例如：不要香菜、餐具不用..." rows={2}/></label>
+            {fulfillment === "dine_in" && <label className="field-label">桌號<input value={tableLabel} onChange={(event) => { invalidateCheckoutAttempt(); setTableLabel(event.target.value); }} placeholder="請輸入桌號"/></label>}
+            <label className="field-label">稱呼<input value={customerName} onChange={(event) => { invalidateCheckoutAttempt(); setCustomerName(event.target.value); }} placeholder="怎麼稱呼您？"/></label>
+            <label className="field-label">聯絡電話<input value={customerPhone} onChange={(event) => { invalidateCheckoutAttempt(); setCustomerPhone(event.target.value); }} inputMode="tel" placeholder="方便店家聯絡"/></label>
+            <label className="field-label">備註（選填）<textarea value={note} onChange={(event) => { invalidateCheckoutAttempt(); setNote(event.target.value); }} placeholder="例如：不要香菜、餐具不用..." rows={2}/></label>
           </div>
           <div className="cart-total"><span>商品小計</span><strong>{money(subtotal)}</strong></div>
           {confirmedOrder ? (
