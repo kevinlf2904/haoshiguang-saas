@@ -1,0 +1,32 @@
+name: Merchant business settings validation
+
+on:
+  pull_request:
+    branches:
+      - feat/merchant-product-management
+      - feat/merchant-business-settings
+  push:
+    branches:
+      - feat/merchant-business-settings
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generate npm lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
