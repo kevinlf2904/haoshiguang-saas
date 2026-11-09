@@ -86,6 +86,10 @@ declare
   v_phone_hash text;
   v_item jsonb;
   v_existing_order jsonb;
+  v_settings public.store_settings%rowtype;
+  v_local_now timestamp;
+  v_day_key text;
+  v_slots jsonb;
 begin
   if p_tenant_slug is null or length(p_tenant_slug) not between 3 and 50 then
     raise exception 'invalid_store' using errcode = '22023';
@@ -114,40 +118,53 @@ begin
   if v_tenant_id is null then
     raise exception 'store_unavailable' using errcode = 'P0002';
   end if;
-  if p_idempotency_key is null or p_client_ip_hash is null
-     or p_client_ip_hash !~ '^[a-f0-9]{32} from migration 005.
-  -- Lock the settings row so a concurrent pause/schedule update cannot race checkout.
-  declare
-    v_settings public.store_settings%rowtype;
-    v_local_now timestamp;
-    v_day_key text;
-    v_slots jsonb;
-  begin
-    select * into v_settings
-    from public.store_settings
-    where tenant_id = v_tenant_id
-    for share;
 
-    if found then
-      if not v_settings.is_accepting_orders then
-        raise exception 'store_unavailable' using errcode = 'P0002';
-      end if;
-      v_local_now := now() at time zone 'Asia/Taipei';
-      if v_local_now::date = any(v_settings.closed_dates) then
+  if p_idempotency_key is null or p_client_ip_hash is null
+     or p_client_ip_hash !~ '^[a-f0-9]{32}$' then
+    raise exception 'invalid_checkout_context' using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(v_tenant_id::text || ':idem:' || p_idempotency_key::text, 0));
+  select jsonb_build_object('id', o.id, 'order_number', o.order_number,
+    'subtotal', o.subtotal, 'total', o.total, 'currency', 'TWD', 'status', o.status)
+    into v_existing_order
+  from public.public_order_idempotency i
+  join public.orders o on o.id = i.order_id
+  where i.tenant_id = v_tenant_id and i.idempotency_key = p_idempotency_key;
+  if v_existing_order is not null then return v_existing_order; end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(v_tenant_id::text || ':ip:' || p_client_ip_hash, 0));
+  if (select count(*) from public.public_order_ip_limits r
+      where r.tenant_id = v_tenant_id and r.ip_hash = p_client_ip_hash
+        and r.created_at > now() - interval '10 minutes') >= 20 then
+    raise exception 'order_ip_rate_limited' using errcode = 'P0001';
+  end if;
+
+  -- Preserve the canonical store business-settings enforcement from migration 005.
+  select * into v_settings
+  from public.store_settings
+  where tenant_id = v_tenant_id
+  for share;
+
+  if found then
+    if not v_settings.is_accepting_orders then
+      raise exception 'store_unavailable' using errcode = 'P0002';
+    end if;
+    v_local_now := now() at time zone 'Asia/Taipei';
+    if v_local_now::date = any(v_settings.closed_dates) then
+      raise exception 'store_closed' using errcode = 'P0002';
+    end if;
+    if v_settings.weekly_hours <> '{}'::jsonb then
+      v_day_key := case extract(isodow from v_local_now)::integer
+        when 1 then 'mon' when 2 then 'tue' when 3 then 'wed'
+        when 4 then 'thu' when 5 then 'fri' when 6 then 'sat'
+        else 'sun' end;
+      v_slots := coalesce(v_settings.weekly_hours -> v_day_key, '[]'::jsonb);
+      if not public.is_within_business_slots(v_slots, v_local_now::time) then
         raise exception 'store_closed' using errcode = 'P0002';
       end if;
-      if v_settings.weekly_hours <> '{}'::jsonb then
-        v_day_key := case extract(isodow from v_local_now)::integer
-          when 1 then 'mon' when 2 then 'tue' when 3 then 'wed'
-          when 4 then 'thu' when 5 then 'fri' when 6 then 'sat'
-          else 'sun' end;
-        v_slots := coalesce(v_settings.weekly_hours -> v_day_key, '[]'::jsonb);
-        if not public.is_within_business_slots(v_slots, v_local_now::time) then
-          raise exception 'store_closed' using errcode = 'P0002';
-        end if;
-      end if;
     end if;
-  end;
+  end if;
 
   -- Lock all referenced active catalog rows before pricing and snapshot insertion.
   -- Concurrent price edits or sell-outs wait until this transaction completes.
@@ -217,127 +234,7 @@ begin
 end;
 $$;
 
+revoke all on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb) from public, anon, authenticated;
+drop function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb);
 revoke all on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text) from public, anon, authenticated;
 grant execute on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text) to service_role;
- then
-    raise exception 'invalid_checkout_context' using errcode = '22023';
-  end if;
-
-  -- Serialize retries for the same checkout key and return the original order.
-  perform pg_advisory_xact_lock(hashtextextended(v_tenant_id::text || ':idem:' || p_idempotency_key::text, 0));
-  select jsonb_build_object('id', o.id, 'order_number', o.order_number,
-    'subtotal', o.subtotal, 'total', o.total, 'currency', 'TWD', 'status', o.status)
-    into v_existing_order
-  from public.public_order_idempotency i
-  join public.orders o on o.id = i.order_id
-  where i.tenant_id = v_tenant_id and i.idempotency_key = p_idempotency_key;
-  if v_existing_order is not null then return v_existing_order; end if;
-
-  -- Limit successful checkout attempts per tenant + trusted request IP.
-  perform pg_advisory_xact_lock(hashtextextended(v_tenant_id::text || ':ip:' || p_client_ip_hash, 0));
-  if (select count(*) from public.public_order_ip_limits r
-      where r.tenant_id = v_tenant_id and r.ip_hash = p_client_ip_hash
-        and r.created_at > now() - interval '10 minutes') >= 20 then
-    raise exception 'order_ip_rate_limited' using errcode = 'P0001';
-  end if;
-
-  -- Preserve the canonical store business-settings enforcement from migration 005.
-  -- Lock the settings row so a concurrent pause/schedule update cannot race checkout.
-  declare
-    v_settings public.store_settings%rowtype;
-    v_local_now timestamp;
-    v_day_key text;
-    v_slots jsonb;
-  begin
-    select * into v_settings
-    from public.store_settings
-    where tenant_id = v_tenant_id
-    for share;
-
-    if found then
-      if not v_settings.is_accepting_orders then
-        raise exception 'store_unavailable' using errcode = 'P0002';
-      end if;
-      v_local_now := now() at time zone 'Asia/Taipei';
-      if v_local_now::date = any(v_settings.closed_dates) then
-        raise exception 'store_closed' using errcode = 'P0002';
-      end if;
-      if v_settings.weekly_hours <> '{}'::jsonb then
-        v_day_key := case extract(isodow from v_local_now)::integer
-          when 1 then 'mon' when 2 then 'tue' when 3 then 'wed'
-          when 4 then 'thu' when 5 then 'fri' when 6 then 'sat'
-          else 'sun' end;
-        v_slots := coalesce(v_settings.weekly_hours -> v_day_key, '[]'::jsonb);
-        if not public.is_within_business_slots(v_slots, v_local_now::time) then
-          raise exception 'store_closed' using errcode = 'P0002';
-        end if;
-      end if;
-    end if;
-  end;
-
-  -- Lock all referenced active catalog rows before pricing and snapshot insertion.
-  -- Concurrent price edits or sell-outs wait until this transaction completes.
-  for v_item in select value from jsonb_array_elements(p_items) loop
-    if coalesce(v_item ->> 'quantity','') !~ '^[0-9]+$'
-       or (v_item ->> 'quantity')::integer not between 1 and 99 then
-      raise exception 'item_unavailable_or_invalid' using errcode = '22023';
-    end if;
-    perform 1
-    from public.categories c
-    join public.products p on p.category_id = c.id and p.tenant_id = c.tenant_id
-    where c.tenant_id = v_tenant_id
-      and c.name = v_item ->> 'category_name' and c.is_active = true
-      and p.name = v_item ->> 'product_name' and p.is_available = true
-    for share of c, p;
-  end loop;
-
-  select count(*), count(distinct p.id),
-         coalesce(sum(p.price::numeric * x.quantity), 0)
-    into v_line_count, v_distinct_count, v_subtotal
-  from jsonb_to_recordset(p_items) as x(product_name text, category_name text, quantity integer)
-  join public.categories c on c.tenant_id = v_tenant_id
-       and c.name = x.category_name and c.is_active = true
-  join public.products p on p.tenant_id = v_tenant_id
-       and p.category_id = c.id and p.name = x.product_name and p.is_available = true
-  where x.quantity between 1 and 99;
-
-  if v_line_count <> jsonb_array_length(p_items) or v_distinct_count <> v_line_count then
-    raise exception 'item_unavailable_or_invalid' using errcode = '22023';
-  end if;
-  -- orders.total/subtotal are PostgreSQL integer columns. Reject overflow explicitly.
-  if v_subtotal > 2000000000 then
-    raise exception 'order_total_exceeds_limit' using errcode = '22023';
-  end if;
-
-  -- Serialize attempts for this store + normalized phone, then allow at most
-  -- five successful checkouts in a rolling ten-minute window.
-  v_phone_hash := md5(v_phone);
-  perform pg_advisory_xact_lock(hashtextextended(v_tenant_id::text || ':' || v_phone_hash, 0));
-  if (select count(*) from public.public_order_rate_limits r
-      where r.tenant_id = v_tenant_id and r.phone_hash = v_phone_hash
-        and r.created_at > now() - interval '10 minutes') >= 5 then
-    raise exception 'order_rate_limited' using errcode = 'P0001';
-  end if;
-  insert into public.public_order_rate_limits(tenant_id, phone_hash)
-  values (v_tenant_id, v_phone_hash);
-
-  insert into public.orders(tenant_id, customer_name, customer_phone, fulfillment, table_label, note, subtotal, total)
-  values (v_tenant_id, btrim(p_customer_name), v_phone, p_fulfillment, p_table_label,
-    coalesce(p_note, ''), v_subtotal::integer, v_subtotal::integer)
-  returning id, order_number into v_order_id, v_order_number;
-
-  insert into public.order_items(order_id, tenant_id, product_id, product_name, unit_price, quantity, line_total)
-  select v_order_id, v_tenant_id, p.id, p.name, p.price, x.quantity, p.price * x.quantity
-  from jsonb_to_recordset(p_items) as x(product_name text, category_name text, quantity integer)
-  join public.categories c on c.tenant_id = v_tenant_id and c.name = x.category_name and c.is_active = true
-  join public.products p on p.tenant_id = v_tenant_id and p.category_id = c.id
-    and p.name = x.product_name and p.is_available = true;
-
-  return jsonb_build_object('id', v_order_id, 'order_number', v_order_number,
-    'subtotal', v_subtotal::integer, 'total', v_subtotal::integer,
-    'currency', 'TWD', 'status', 'pending');
-end;
-$$;
-
-revoke all on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb) from public;
-grant execute on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb) to anon, authenticated;
