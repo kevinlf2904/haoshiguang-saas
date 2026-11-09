@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - feat/merchant-business-settings
-  push:
-    branches:
-      - feat/merchant-business-settings
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
