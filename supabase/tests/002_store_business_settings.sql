@@ -41,12 +41,17 @@ on conflict (tenant_id) do nothing;
 
 -- Tenant B catalog fixtures are used to verify that tenant A cannot mutate them.
 insert into public.categories(tenant_id,name)
-values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','B 專屬分類')
+values
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','A 專屬分類'),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','B 專屬分類')
 on conflict (tenant_id,name) do nothing;
 insert into public.products(tenant_id,category_id,name,price)
-select c.tenant_id,c.id,'B 專屬商品',99
+select c.tenant_id,c.id,
+  case when c.tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' then 'A 專屬商品' else 'B 專屬商品' end,
+  99
 from public.categories c
-where c.tenant_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and c.name='B 專屬分類'
+where (c.tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and c.name='A 專屬分類')
+   or (c.tenant_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and c.name='B 專屬分類')
 on conflict (tenant_id,category_id,name) do nothing;
 
 -- Orders and customer details are private to each tenant.
@@ -154,14 +159,22 @@ begin
 end $$;
 
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',false);
-do $$
+do $
 declare affected integer;
 begin
   update public.store_settings set prep_time_minutes=45
   where tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   get diagnostics affected = row_count;
   if affected <> 0 then raise exception 'staff must not update store settings'; end if;
-end $$;
+  update public.categories set name='員工非法分類修改'
+  where tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and name='A 專屬分類';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'staff must not update own tenant categories'; end if;
+  update public.products set price=1
+  where tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and name='A 專屬商品';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'staff must not update own tenant products'; end if;
+end $;
 reset role;
 
 -- INSERT is limited to owner/manager membership; staff and another tenant's owner are denied.
