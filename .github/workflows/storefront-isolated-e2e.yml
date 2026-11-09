@@ -53,9 +53,10 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Install Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v3
         with:
-          version: latest
+          # Keep CLI v2 until the local Supabase config is explicitly migrated to v3.
+          version: v2.stable
 
       - name: Start disposable local Supabase
         run: supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta
