@@ -25,6 +25,24 @@ insert into public.store_settings(tenant_id)
 select id from public.tenants
 on conflict (tenant_id) do nothing;
 
+-- Orders and customer details are private to each tenant.
+insert into public.orders(tenant_id,customer_name,customer_phone,fulfillment,subtotal,total)
+values
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','店家 A 顧客','0911111111','takeaway',100,100),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','店家 B 顧客','0922222222','takeaway',200,200);
+insert into public.order_items(order_id,tenant_id,product_name,unit_price,quantity,line_total)
+select o.id,o.tenant_id,'隔離測試商品',o.total,1,o.total
+from public.orders o
+where o.customer_name in ('店家 A 顧客','店家 B 顧客');
+
+if not exists (select 1 from pg_roles where rolname='anon') then
+  raise exception 'anon role missing';
+end if;
+if has_table_privilege('anon','public.orders','SELECT')
+   or has_table_privilege('anon','public.order_items','SELECT') then
+  raise exception 'anon must not have direct SELECT privilege on orders or order_items';
+end if;
+
 -- Public anon reads only active tenants' settings; inactive tenant data stays hidden.
 update public.tenants set is_active=false
 where id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
