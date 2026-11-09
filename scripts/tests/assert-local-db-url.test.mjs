@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const validator = new URL("../assert-local-db-url.mjs", import.meta.url);
+const validator = fileURLToPath(new URL("../assert-local-db-url.mjs", import.meta.url));
 
 function check(url) {
   return spawnSync(process.execPath, [validator, url], { encoding: "utf8" });
