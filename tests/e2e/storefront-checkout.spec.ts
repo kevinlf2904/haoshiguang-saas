@@ -45,6 +45,28 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(page.getByText("海鮮湯麵", { exact: true })).toBeVisible();
   await expect(page.locator(".menu-count")).toContainText("27");
 
+  // Keep an already-open customer page and cart synchronized with merchant catalog edits.
+  await page.getByRole("button", { name: "湯麵類", exact: true }).click();
+  await page.getByRole("button", { name: "加入海鮮湯麵" }).click();
+  const { data: soupProduct, error: soupProductError } = await admin.from("products")
+    .select("id,price").eq("tenant_id", tenant!.id).eq("name", "海鮮湯麵").single();
+  expect(soupProductError).toBeNull();
+  expect(soupProduct).not.toBeNull();
+  const originalSoupPrice = soupProduct!.price;
+  const { error: priceUpdateError } = await admin.from("products")
+    .update({ price: originalSoupPrice + 1 }).eq("id", soupProduct!.id);
+  expect(priceUpdateError).toBeNull();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.locator(".cart-line-main span")).toHaveText(`NT${originalSoupPrice + 1} / 份`);
+  await expect(page.locator(".cart-total strong")).toHaveText(`NT${originalSoupPrice + 1}`);
+  const { error: priceRestoreError } = await admin.from("products")
+    .update({ price: originalSoupPrice }).eq("id", soupProduct!.id);
+  expect(priceRestoreError).toBeNull();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.locator(".cart-total strong")).toHaveText(`NT${originalSoupPrice}`);
+
+  // The later order-creation assertion uses the canonical pilot price after restoration.
+
   // Merchant signs in and pauses orders through the actual settings UI.
   await page.goto("/merchant/login");
   await page.getByLabel("電子郵件").fill(email);
