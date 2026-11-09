@@ -11,7 +11,7 @@ type StoreTenant = { id: string; name: string; slug: string; phone: string | nul
 type CartLine = { key: string; item: MenuItem; quantity: number };
 type StoreSettings = { is_accepting_orders: boolean; prep_time_minutes: number; weekly_hours: Record<string, { open: string; close: string }[]>; closed_dates: string[] };
 
-const money = (value: number) => `NT${Math.round(value).toLocaleString("zh-TW")}`;
+const money = (value: number) => "NT$" + Math.round(value).toLocaleString("zh-TW");
 
 export default function StorefrontPage() {
   const params = useParams<{ slug: string }>();
