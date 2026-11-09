@@ -7,19 +7,48 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update PR branch from its latest base
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          fetch-depth: 0
+      - name: Merge latest product management branch
         shell: bash
         run: |
           set -euo pipefail
-          gh pr update-branch 6 --repo "$GITHUB_REPOSITORY"
-          git fetch origin "$GITHUB_REF_NAME"
-          git reset --hard "origin/$GITHUB_REF_NAME"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin feat/merchant-product-management
+          if git merge --no-ff --no-edit origin/feat/merchant-product-management; then
+            echo "Upstream branch merged without conflicts."
+          else
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            if [ -z "$conflicts" ]; then
+              echo "Merge failed without resolvable file conflicts." >&2
+              exit 1
+            fi
+            printf '%s\n' "$conflicts"
+            while IFS= read -r file; do
+              [ -n "$file" ] || continue
+              echo "Keeping PR6 implementation for conflicted file: $file"
+              git checkout --ours -- "$file"
+              git add -- "$file"
+            done <<< "$conflicts"
+            git commit --no-edit
+          fi
+          node <<'NODE'
+          const fs = require("node:fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          pkg.scripts = pkg.scripts || {};
+          pkg.scripts["test:db"] = "bash scripts/test-db.sh";
+          pkg.scripts["test:url"] = "node --test scripts/tests/*.test.mjs";
+          fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+          NODE
+          git add package.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: preserve foundation test scripts in integrated branch"
+          fi
+          git push origin "HEAD:$GITHUB_REF_NAME"
