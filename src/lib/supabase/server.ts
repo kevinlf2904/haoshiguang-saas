@@ -7,12 +7,14 @@ export async function createSupabaseServerClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error("Supabase environment is not configured.");
 
+  type CookieOptions = Parameters<typeof cookieStore.set>[2];
+
   return createServerClient(url, key, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
         } catch {
