@@ -28,19 +28,23 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   const { data: soldOut } = await admin.from("products").select("id")
     .eq("tenant_id", tenant!.id).eq("name", "海鮮湯麵").single();
   expect(soldOut).not.toBeNull();
-  await admin.from("products").update({ is_available: false }).eq("id", soldOut!.id);
+  const { error: soldOutUpdateError } = await admin.from("products").update({ is_available: false }).eq("id", soldOut!.id);
+  expect(soldOutUpdateError).toBeNull();
   await page.goto("/store/laozhang");
   await expect(page.getByRole("heading", { name: "老張麵店" })).toBeVisible();
   await expect(page.getByText("海鮮湯麵", { exact: true })).toHaveCount(0);
-  await admin.from("products").update({ is_available: true }).eq("id", soldOut!.id);
+  const { error: soldOutRestoreError } = await admin.from("products").update({ is_available: true }).eq("id", soldOut!.id);
+  expect(soldOutRestoreError).toBeNull();
 
   const { data: soupCategory } = await admin.from("categories").select("id")
     .eq("tenant_id", tenant!.id).eq("name", "湯類").single();
   expect(soupCategory).not.toBeNull();
-  await admin.from("categories").update({ is_active: false }).eq("id", soupCategory!.id);
+  const { error: categoryDisableError } = await admin.from("categories").update({ is_active: false }).eq("id", soupCategory!.id);
+  expect(categoryDisableError).toBeNull();
   await page.reload();
   await expect(page.getByRole("button", { name: "湯類", exact: true })).toHaveCount(0);
-  await admin.from("categories").update({ is_active: true }).eq("id", soupCategory!.id);
+  const { error: categoryRestoreError } = await admin.from("categories").update({ is_active: true }).eq("id", soupCategory!.id);
+  expect(categoryRestoreError).toBeNull();
   await page.reload();
   await expect(page.getByText("海鮮湯麵", { exact: true })).toBeVisible();
   await expect(page.locator(".menu-count")).toContainText("27");
@@ -64,6 +68,19 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   expect(priceRestoreError).toBeNull();
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.locator(".cart-total strong")).toHaveText(`NT$${originalSoupPrice}`);
+
+  // A product becoming unavailable while already in the cart must remove that line.
+  const { error: cartSoldOutError } = await admin.from("products")
+    .update({ is_available: false }).eq("id", soupProduct!.id);
+  expect(cartSoldOutError).toBeNull();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.locator(".cart-line")).toHaveCount(0);
+  await expect(page.locator(".cart-total strong")).toHaveText("NT$0");
+  const { error: cartSoldOutRestoreError } = await admin.from("products")
+    .update({ is_available: true }).eq("id", soupProduct!.id);
+  expect(cartSoldOutRestoreError).toBeNull();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("button", { name: "加入海鮮湯麵" })).toBeEnabled();
 
   // The later order-creation assertion uses the canonical pilot price after restoration.
 
