@@ -88,6 +88,7 @@ begin
 
   select * into v_settings from public.store_settings where tenant_id = v_tenant_id;
   if found then
+    -- All schedule decisions use the tenant's configured Taiwan business timezone.
     if not v_settings.is_accepting_orders then
       raise exception 'store_unavailable' using errcode = 'P0002';
     end if;
