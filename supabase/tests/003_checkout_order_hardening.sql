@@ -102,7 +102,7 @@ begin
     perform public.create_public_order(
       'laozhang', 'IP限流測試', '0999999999', 'takeaway', null, '',
       '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
-      '66666666-6666-4666-8666-666666666666'::uuid, repeat('e',64), lpad(i::text,64,'e'), repeat('e',64)
+      '66666666-6666-4666-8666-666666666666'::uuid, repeat('e',64), repeat('e',62) || '20', repeat('e',64)
     );
   exception when sqlstate 'P0001' then
     v_ip_rejected := true;
