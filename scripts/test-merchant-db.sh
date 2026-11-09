@@ -48,5 +48,6 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot
 echo "Testing tenant RLS, operating-hours validation, and checkout rejection..."
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/002_store_business_settings.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/003_checkout_order_hardening.sql
+bash scripts/test-checkout-concurrency.sh
 
-echo "PASS: isolated PostgreSQL business-settings/RLS/checkout tests completed."
+echo "PASS: isolated PostgreSQL business-settings/RLS/checkout/concurrency tests completed."
