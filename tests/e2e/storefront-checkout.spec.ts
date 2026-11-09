@@ -114,9 +114,16 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await page.getByRole("button", { name: "加入海鮮湯麵" }).click();
   await page.getByLabel("稱呼").fill(customerName);
   await page.getByLabel("聯絡電話").fill("0912345678");
+  const checkoutResponsePromise = page.waitForResponse(response => response.url().includes("/api/orders") && response.request().method() === "POST");
   await page.getByRole("button", { name: /送出訂單/ }).click();
+  const checkoutResponse = await checkoutResponsePromise;
+  expect(checkoutResponse.status()).toBe(201);
+  const checkoutPayload = await checkoutResponse.json() as { order?: { order_number?: number; total?: number; currency?: string } };
+  expect(checkoutPayload.order?.order_number).toBeTruthy();
+  expect(checkoutPayload.order?.currency).toBe("TWD");
+  expect(Number(checkoutPayload.order?.total)).toBe(180);
   await expect(page.getByText("訂單已建立")).toBeVisible();
-  await expect(page.getByText("應付金額 NT$180")).toBeVisible();
+  await expect(page.locator(".checkout-result span")).toHaveText("應付金額 NT$180");
 
   // The same committed order is visible to the authenticated tenant and can be accepted.
   await page.goto("/merchant/orders");
