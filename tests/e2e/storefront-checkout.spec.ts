@@ -52,7 +52,10 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await page.getByRole("button", { name: "登入管理後台" }).click();
   await page.goto("/merchant/settings");
   await expect(page.getByRole("heading", { name: "營業設定" })).toBeVisible();
-  await page.locator('input[type="number"]').fill("35");
+  // Wait for the authenticated owner controls, not merely the page shell heading.
+  await expect(page.getByRole("button", { name: "接單中 · 點擊暫停" })).toBeVisible();
+  await expect(page.locator(".prep-time-card input")).toBeVisible();
+  await page.locator(".prep-time-card input").fill("35");
   await page.getByRole("button", { name: "接單中 · 點擊暫停" }).click();
   await page.getByRole("button", { name: "儲存營業設定" }).click();
   await expect(page.getByRole("status")).toContainText("營業設定已儲存");
