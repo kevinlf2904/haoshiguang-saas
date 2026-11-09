@@ -14,6 +14,19 @@ begin
   select id into v_tenant from public.tenants where slug = 'laozhang';
   if v_tenant is null then raise exception 'pilot_tenant_missing'; end if;
 
+  if has_function_privilege('anon',
+    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text)', 'EXECUTE') then
+    raise exception 'anon_must_not_execute_checkout_rpc';
+  end if;
+  if has_function_privilege('authenticated',
+    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text)', 'EXECUTE') then
+    raise exception 'authenticated_must_not_execute_checkout_rpc';
+  end if;
+  if not has_function_privilege('service_role',
+    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text)', 'EXECUTE') then
+    raise exception 'service_role_must_execute_checkout_rpc';
+  end if;
+
   insert into public.orders(tenant_id, customer_name, customer_phone, fulfillment, subtotal, total)
   values (v_tenant, '狀態轉換測試', '0912345678', 'takeaway', 20, 20)
   returning id into v_order;
