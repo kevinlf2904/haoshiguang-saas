@@ -86,6 +86,8 @@ export async function POST(request: NextRequest) {
     if (error.message.includes("store_unavailable")) return json("這間店目前暫停接單。", 404);
     if (error.message.includes("store_closed")) return json("目前不在店家營業時間或為公休日，暫時無法送出訂單。", 409);
     if (error.message.includes("item_unavailable_or_invalid")) return json("部分餐點已停售或資料有變動，請重新整理菜單。", 409);
+    if (error.message.includes("order_rate_limited")) return json("送單次數過於頻繁，請 10 分鐘後再試。", 429);
+    if (error.message.includes("order_total_exceeds_limit")) return json("訂單金額超過系統允許上限，請聯絡店家。", 400);
     if (error.code === "22023") return json("訂單資料不完整或格式有誤，請重新確認。", 400);
     return json("訂單暫時無法建立，請稍後再試。", 500);
   }
