@@ -25,6 +25,33 @@ insert into public.store_settings(tenant_id)
 select id from public.tenants
 on conflict (tenant_id) do nothing;
 
+-- Public anon reads only active tenants' settings; inactive tenant data stays hidden.
+update public.tenants set is_active=false
+where id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+set role anon;
+do $
+declare visible_count integer;
+begin
+  select count(*) into visible_count
+  from public.store_settings
+  where tenant_id in (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  );
+  if visible_count <> 1 then
+    raise exception 'anon must read active tenant settings and must not read inactive tenant settings';
+  end if;
+  if not exists (
+    select 1 from public.tenants
+    where id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and is_active
+  ) then raise exception 'anon should read active public tenant'; end if;
+  if exists (
+    select 1 from public.tenants
+    where id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  ) then raise exception 'anon must not read inactive tenant'; end if;
+end $;
+reset role;
+
 -- Owner can update its own tenant settings.
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
@@ -62,6 +89,48 @@ begin
   get diagnostics affected = row_count;
   if affected <> 0 then raise exception 'staff must not update store settings'; end if;
 end $$;
+reset role;
+
+-- INSERT is limited to owner/manager membership; staff and another tenant's owner are denied.
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',false);
+do $
+begin
+  begin
+    insert into public.store_settings(tenant_id)
+    values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    raise exception 'TEST_EXPECTED_STAFF_INSERT_DENIAL_NOT_RAISED';
+  exception when insufficient_privilege then
+    null;
+  end;
+end $;
+
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+do $
+begin
+  begin
+    insert into public.store_settings(tenant_id)
+    values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    raise exception 'TEST_EXPECTED_CROSS_TENANT_INSERT_DENIAL_NOT_RAISED';
+  exception when insufficient_privilege then
+    null;
+  end;
+end $;
+
+-- DELETE is intentionally unavailable to authenticated users, including owners.
+do $
+begin
+  if has_table_privilege(current_user, 'public.store_settings', 'DELETE') then
+    raise exception 'authenticated role must not have DELETE privilege on store_settings';
+  end if;
+  begin
+    delete from public.store_settings
+    where tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    raise exception 'TEST_EXPECTED_DELETE_PRIVILEGE_DENIAL_NOT_RAISED';
+  exception when insufficient_privilege then
+    null;
+  end;
+end $;
 reset role;
 
 -- Weekly-hours validation: valid split shifts pass; overlapping or malformed slots fail.
