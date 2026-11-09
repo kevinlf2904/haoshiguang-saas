@@ -120,7 +120,9 @@ set closed_dates='{}'::date[],
       case extract(isodow from now() at time zone 'Asia/Taipei')::integer
         when 1 then 'mon' when 2 then 'tue' when 3 then 'wed'
         when 4 then 'thu' when 5 then 'fri' when 6 then 'sat' else 'sun' end,
-      '[{"open":"00:00","close":"00:01"}]'::jsonb
+      case when (now() at time zone 'Asia/Taipei')::time < time '12:00'
+        then '[{"open":"23:58","close":"23:59"}]'::jsonb
+        else '[{"open":"00:00","close":"00:01"}]'::jsonb end
     )
 where tenant_id=(select id from public.tenants where slug='laozhang');
 
@@ -133,5 +135,37 @@ begin
   exception when others then
     if sqlerrm='TEST_EXPECTED_OUTSIDE_HOURS_REJECTION_NOT_RAISED' then raise; end if;
     if position('store_closed' in sqlerrm)=0 then raise; end if;
+  end;
+end $$;
+
+
+-- An open store accepts a valid order and calculates price from the database.
+update public.store_settings
+set closed_dates='{}'::date[], weekly_hours='{}'::jsonb, is_accepting_orders=true
+where tenant_id=(select id from public.tenants where slug='laozhang');
+
+do $$
+declare result jsonb;
+begin
+  result := public.create_public_order('laozhang','測試顧客','0912345678','takeaway',null,'',
+    '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb);
+  if (result ->> 'total')::integer <> 180 then
+    raise exception 'checkout must calculate the catalog price from database rows';
+  end if;
+end $$;
+
+-- A manually sold-out product must be rejected by the same server-side RPC.
+update public.products set is_available=false
+where tenant_id=(select id from public.tenants where slug='laozhang') and name='海鮮湯麵';
+
+do $$
+begin
+  begin
+    perform public.create_public_order('laozhang','測試顧客','0912345678','takeaway',null,'',
+      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb);
+    raise exception 'TEST_EXPECTED_SOLD_OUT_REJECTION_NOT_RAISED';
+  exception when others then
+    if sqlerrm='TEST_EXPECTED_SOLD_OUT_REJECTION_NOT_RAISED' then raise; end if;
+    if position('item_unavailable_or_invalid' in sqlerrm)=0 then raise; end if;
   end;
 end $$;
