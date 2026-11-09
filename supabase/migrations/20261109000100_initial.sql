@@ -46,8 +46,7 @@ create table public.products (
   is_available boolean not null default true,
   sort_order int not null default 0,
   created_at timestamptz not null default now(),
-  foreign key (category_id,tenant_id) references public.categories(id,tenant_id) on delete cascade,
-  unique (tenant_id,category_id,name)
+  foreign key (category_id,tenant_id) references public.categories(id,tenant_id) on delete cascade
 );
 
 create table public.orders (
