@@ -183,7 +183,7 @@ do $$
 begin
   begin
     perform public.create_public_order('laozhang','測試顧客','0912345678','takeaway',null,'',
-      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb);
+      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb, '44444444-4444-4444-8444-000000000001'::uuid, repeat('d',32));
     raise exception 'TEST_EXPECTED_PAUSED_REJECTION_NOT_RAISED';
   exception when others then
     if sqlerrm='TEST_EXPECTED_PAUSED_REJECTION_NOT_RAISED' then raise; end if;
@@ -201,7 +201,7 @@ do $$
 begin
   begin
     perform public.create_public_order('laozhang','測試顧客','0912345678','takeaway',null,'',
-      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb);
+      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb, '44444444-4444-4444-8444-000000000002'::uuid, repeat('d',32));
     raise exception 'TEST_EXPECTED_HOLIDAY_REJECTION_NOT_RAISED';
   exception when others then
     if sqlerrm='TEST_EXPECTED_HOLIDAY_REJECTION_NOT_RAISED' then raise; end if;
@@ -226,7 +226,7 @@ do $$
 begin
   begin
     perform public.create_public_order('laozhang','測試顧客','0912345678','takeaway',null,'',
-      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb);
+      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb, '44444444-4444-4444-8444-000000000003'::uuid, repeat('d',32));
     raise exception 'TEST_EXPECTED_OUTSIDE_HOURS_REJECTION_NOT_RAISED';
   exception when others then
     if sqlerrm='TEST_EXPECTED_OUTSIDE_HOURS_REJECTION_NOT_RAISED' then raise; end if;
@@ -244,7 +244,7 @@ do $$
 declare result jsonb;
 begin
   result := public.create_public_order('laozhang','測試顧客','0912345678','takeaway',null,'',
-    '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb);
+    '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb, '44444444-4444-4444-8444-000000000004'::uuid, repeat('d',32));
   if (result ->> 'total')::integer <> 180 then
     raise exception 'checkout must calculate the catalog price from database rows';
   end if;
@@ -258,7 +258,7 @@ do $$
 begin
   begin
     perform public.create_public_order('laozhang','測試顧客','0912345678','takeaway',null,'',
-      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb);
+      '[{"product_name":"海鮮湯麵","category_name":"湯麵類","quantity":1}]'::jsonb, '44444444-4444-4444-8444-000000000005'::uuid, repeat('d',32));
     raise exception 'TEST_EXPECTED_SOLD_OUT_REJECTION_NOT_RAISED';
   exception when others then
     if sqlerrm='TEST_EXPECTED_SOLD_OUT_REJECTION_NOT_RAISED' then raise; end if;
