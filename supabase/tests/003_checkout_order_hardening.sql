@@ -15,15 +15,15 @@ begin
   if v_tenant is null then raise exception 'pilot_tenant_missing'; end if;
 
   if has_function_privilege('anon',
-    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text)', 'EXECUTE') then
+    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text,text)', 'EXECUTE') then
     raise exception 'anon_must_not_execute_checkout_rpc';
   end if;
   if has_function_privilege('authenticated',
-    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text)', 'EXECUTE') then
+    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text,text)', 'EXECUTE') then
     raise exception 'authenticated_must_not_execute_checkout_rpc';
   end if;
   if not has_function_privilege('service_role',
-    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text)', 'EXECUTE') then
+    'public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text,text)', 'EXECUTE') then
     raise exception 'service_role_must_execute_checkout_rpc';
   end if;
 
@@ -49,7 +49,7 @@ begin
     perform public.create_public_order(
       'laozhang', '限流測試', '0987654321', 'takeaway', null, '',
       '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
-      ('22222222-2222-4222-8222-' || lpad(i::text,12,'0'))::uuid, repeat('b',32), repeat('1',64)
+      ('22222222-2222-4222-8222-' || lpad(i::text,12,'0'))::uuid, repeat('b',64), repeat('f',64), repeat('1',64)
     );
   end loop;
 
@@ -57,7 +57,7 @@ begin
     perform public.create_public_order(
       'laozhang', '限流測試', '0987654321', 'takeaway', null, '',
       '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
-      '33333333-3333-4333-8333-333333333333'::uuid, repeat('c',32), repeat('2',64)
+      '33333333-3333-4333-8333-333333333333'::uuid, repeat('c',64), repeat('f',64), repeat('2',64)
     );
   exception when sqlstate 'P0001' then
     v_rejected := true;
@@ -68,12 +68,12 @@ begin
   v_first := public.create_public_order(
     'laozhang', '冪等測試', '0911111111', 'takeaway', null, '',
     '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
-    '11111111-1111-4111-8111-111111111111'::uuid, repeat('a',32), repeat('a',64)
+    '11111111-1111-4111-8111-111111111111'::uuid, repeat('a',64), repeat('d',64), repeat('a',64)
   );
   v_second := public.create_public_order(
     'laozhang', '冪等測試', '0911111111', 'takeaway', null, '',
     '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
-    '11111111-1111-4111-8111-111111111111'::uuid, repeat('a',32), repeat('a',64)
+    '11111111-1111-4111-8111-111111111111'::uuid, repeat('a',64), repeat('d',64), repeat('a',64)
   );
   if v_first ->> 'id' <> v_second ->> 'id' then
     raise exception 'idempotency_did_not_return_original_order';
@@ -83,7 +83,7 @@ begin
     perform public.create_public_order(
       'laozhang', '冪等測試', '0911111111', 'takeaway', null, '',
       '[{"product_name":"牛肉麵","category_name":"麵類","quantity":1}]'::jsonb,
-      '11111111-1111-4111-8111-111111111111'::uuid, repeat('a',32), repeat('b',64)
+      '11111111-1111-4111-8111-111111111111'::uuid, repeat('a',64), repeat('d',64), repeat('b',64)
     );
     raise exception 'idempotency_payload_mismatch_was_allowed';
   exception when sqlstate '22023' then
@@ -95,14 +95,14 @@ begin
     perform public.create_public_order(
       'laozhang', 'IP限流測試', ('09' || lpad(i::text,8,'0')), 'takeaway', null, '',
       '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
-      ('55555555-5555-4555-8555-' || lpad(i::text,12,'0'))::uuid, repeat('e',32), repeat('e',64)
+      ('55555555-5555-4555-8555-' || lpad(i::text,12,'0'))::uuid, repeat('e',64), lpad(i::text,64,'e'), repeat('e',64)
     );
   end loop;
   begin
     perform public.create_public_order(
       'laozhang', 'IP限流測試', '0999999999', 'takeaway', null, '',
       '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
-      '66666666-6666-4666-8666-666666666666'::uuid, repeat('e',32), repeat('e',64)
+      '66666666-6666-4666-8666-666666666666'::uuid, repeat('e',64), lpad(i::text,64,'e'), repeat('e',64)
     );
   exception when sqlstate 'P0001' then
     v_ip_rejected := true;
