@@ -10,23 +10,13 @@ on:
       - feat/merchant-order-management
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Sync latest upstream PR branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh pr update-branch 4 --repo "$GITHUB_REPOSITORY"
-          git fetch origin "$GITHUB_REF_NAME"
-          git reset --hard "origin/$GITHUB_REF_NAME"
       - uses: actions/setup-node@v4
         with:
           node-version: 20
