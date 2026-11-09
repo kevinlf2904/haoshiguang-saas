@@ -1,0 +1,83 @@
+name: Isolated Supabase storefront E2E
+
+on:
+  pull_request:
+    branches:
+      - feat/merchant-business-settings
+  push:
+    branches:
+      - feat/merchant-business-settings
+
+permissions:
+  contents: read
+
+jobs:
+  storefront-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Generate npm lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start disposable local Supabase
+        run: supabase start -x studio,edge-runtime,logflare,vector
+
+      - name: Reset isolated database and apply all migrations
+        run: supabase db reset --local
+
+      - name: Export local Supabase connection values
+        shell: bash
+        run: |
+          supabase status -o env > /tmp/supabase-status.env
+          node <<'NODE'
+          const fs = require("node:fs");
+          const raw = fs.readFileSync("/tmp/supabase-status.env", "utf8");
+          const values = {};
+          for (const line of raw.split(/\r?\n/)) {
+            const match = line.match(/^([A-Z_]+)=(.*)$/);
+            if (!match) continue;
+            let value = match[2].trim();
+            if (value.startsWith('"') && value.endsWith('"')) value = JSON.parse(value);
+            values[match[1]] = value;
+          }
+          const required = ["API_URL", "ANON_KEY", "SERVICE_ROLE_KEY", "DB_URL"];
+          for (const key of required) if (!values[key]) throw new Error("Missing local Supabase value: " + key);
+          const env = [
+            "NEXT_PUBLIC_SUPABASE_URL=" + values.API_URL,
+            "NEXT_PUBLIC_SUPABASE_ANON_KEY=" + values.ANON_KEY,
+            "SUPABASE_SERVICE_ROLE_KEY=" + values.SERVICE_ROLE_KEY,
+            "DB_URL=" + values.DB_URL,
+          ].join("\n") + "\n";
+          fs.appendFileSync(process.env.GITHUB_ENV, env);
+          NODE
+
+      - name: Seed pilot catalog into disposable Supabase
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
+
+      - name: Create isolated merchant login fixture
+        run: node scripts/e2e/create-merchant-user.mjs
+
+      - name: Build application against local Supabase
+        run: npm run build
+
+      - name: Run browser-based storefront and merchant workflow
+        run: npm run test:e2e
+
+      - name: Stop disposable Supabase
+        if: always()
+        run: supabase stop --no-backup
