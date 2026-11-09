@@ -49,6 +49,12 @@ jobs:
             findings,
           }, null, 2));
           NODE
+      - name: Verify lint and TypeScript independently
+        run: |
+          npm ls minimatch eslint-plugin-import @typescript-eslint/typescript-estree || true
+          npm run lint
+          npm run typecheck
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
