@@ -79,7 +79,7 @@ begin
 end $$;
 
 -- The opening boundary is inclusive and the closing boundary is exclusive.
-do $
+do $$
 declare slots jsonb := '[{"open":"11:00","close":"14:00"}]'::jsonb;
 begin
   if not public.is_within_business_slots(slots, time '11:00') then
@@ -91,7 +91,7 @@ begin
   if public.is_within_business_slots(slots, time '14:00') then
     raise exception 'closing boundary must be exclusive';
   end if;
-end $;
+end $$;
 
 -- Ensure the checkout RPC rejects a paused store, a holiday, and a closed weekly interval.
 update public.store_settings
