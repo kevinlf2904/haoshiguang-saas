@@ -101,6 +101,7 @@ export default function MerchantSettingsPage() {
 
   const selected = memberships.find(item => item.tenant_id === tenantId)?.tenants;
   const canManage = ["owner", "manager"].includes(memberships.find(item => item.tenant_id === tenantId)?.role || "");
+  const scheduleConfigured = Object.keys(settings.weekly_hours).length > 0;
 
   return <main className="merchant-settings-shell">
     <header className="merchant-settings-header"><Link href="/" className="merchant-settings-brand">好食光 <span>店家管理</span></Link>
@@ -117,7 +118,7 @@ export default function MerchantSettingsPage() {
       <section className="settings-card"><div className="settings-heading"><h2>每週營業時間</h2><span>台灣時間 UTC+8 · 每日最多兩個時段</span></div>
         <div className="weekly-hours">{days.map(day => <div className="hours-day" key={day.key}><strong>{day.label}</strong><div className="hours-slots">
           {(settings.weekly_hours[day.key] || []).map((slot,index) => <div className="hours-slot" key={index}><input aria-label={day.label+"開始時間"} type="time" value={slot.open} onChange={event => setSlot(day.key,index,"open",event.target.value)} /><span>至</span><input aria-label={day.label+"結束時間"} type="time" value={slot.close} onChange={event => setSlot(day.key,index,"close",event.target.value)} /><button onClick={() => removeSlot(day.key,index)} aria-label="移除此時段">移除</button></div>)}
-          {!(settings.weekly_hours[day.key] || []).length && <span className="day-closed">未設定（不開放線上接單）</span>}
+          {!(settings.weekly_hours[day.key] || []).length && <span className="day-closed">{scheduleConfigured ? "未設定（不開放線上接單）" : "尚未設定營業時間（暫不限制）"}</span>}
           {(settings.weekly_hours[day.key] || []).length < 2 && <button className="add-hours" onClick={() => addSlot(day.key)}>＋ 新增時段</button>}
         </div></div>)}</div>
       </section>
