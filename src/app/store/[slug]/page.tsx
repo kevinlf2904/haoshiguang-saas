@@ -70,9 +70,6 @@ export default function StorefrontPage() {
             const item = nextProducts.find(product => product.id === line.item.id);
             return item ? [{ ...line, item }] : [];
           });
-          if (refreshed.length !== current.length) {
-            setCheckoutError("菜單已更新，部分停售或下架餐點已從購物車移除，請確認訂單內容。");
-          }
           return refreshed;
         });
         setSettingsError(false);
