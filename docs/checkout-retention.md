@@ -1,7 +1,7 @@
 # Checkout retention policy
 
-The public checkout path performs opportunistic cleanup inside the same database
-transaction as each checkout. This avoids assuming that `pg_cron`, a deployed
+Each newly created order triggers opportunistic cleanup inside the same database
+transaction as checkout. This avoids assuming that `pg_cron`, a deployed
 Vercel project, or an external scheduler is already configured.
 
 | Data | Retention | Cleanup batch |
