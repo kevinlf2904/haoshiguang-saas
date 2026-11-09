@@ -27,6 +27,7 @@ export default function StorefrontPage() {
   const [note, setNote] = useState("");
   const [showCart, setShowCart] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
   const [confirmedOrder, setConfirmedOrder] = useState<{ order_number: number; total: number } | null>(null);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
@@ -98,9 +99,11 @@ export default function StorefrontPage() {
     if (fulfillment === "dine_in" && !tableLabel.trim()) return setCheckoutError("內用請填寫桌號。");
     setSubmitting(true);
     try {
+      const requestKey = idempotencyKey || crypto.randomUUID();
+      if (!idempotencyKey) setIdempotencyKey(requestKey);
       const response = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey },
         body: JSON.stringify({
           storeSlug: params.slug,
           customerName,
@@ -119,6 +122,7 @@ export default function StorefrontPage() {
       }
       setConfirmedOrder({ ...result.order, total: confirmedTotal });
       setCart([]);
+      setIdempotencyKey("");
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : "網路連線異常，請稍後再試。");
     } finally {
