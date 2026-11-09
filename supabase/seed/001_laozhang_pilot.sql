@@ -45,7 +45,7 @@ select t.id,c.id,p.name,p.description,p.price,p.sort_order
 from public.tenants t join p on true join public.categories c on c.tenant_id=t.id and c.name=p.category
 where t.slug='laozhang'
 on conflict(tenant_id,category_id,name) do update
-set description=excluded.description,price=excluded.price,sort_order=excluded.sort_order,is_available=true;
+set description=excluded.description,price=excluded.price,sort_order=excluded.sort_order; -- Preserve the store operator's availability toggle.
 commit;
 
 -- 店家自訂選項尚未建成 modifier schema：升級燒肉飯 +30 元；加麵 +20 元。
