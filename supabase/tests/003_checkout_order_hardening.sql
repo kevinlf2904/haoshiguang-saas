@@ -108,7 +108,53 @@ begin
     v_ip_rejected := true;
   end;
   if not v_ip_rejected then raise exception 'ip_rate_limit_was_not_enforced'; end if;
+
+  -- Retention removes stale rows and preserves records inside the retention windows.
+  if has_function_privilege('anon', 'public.cleanup_public_order_retention(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.cleanup_public_order_retention(uuid)', 'EXECUTE') then
+    raise exception 'public_roles_must_not_execute_retention_cleanup';
+  end if;
+  if not has_function_privilege('service_role', 'public.cleanup_public_order_retention(uuid)', 'EXECUTE') then
+    raise exception 'service_role_must_execute_retention_cleanup';
+  end if;
+
+  insert into public.orders(tenant_id, customer_name, customer_phone, fulfillment, subtotal, total)
+  values (v_tenant, '保留期限測試', '0910000000', 'takeaway', 20, 20)
+  returning id into v_order;
+
+  insert into public.public_order_ip_limits(tenant_id, ip_hash, created_at) values
+    (v_tenant, repeat('1',64), now() - interval '25 hours'),
+    (v_tenant, repeat('2',64), now() - interval '5 minutes');
+  insert into public.public_order_rate_limits(tenant_id, phone_hash, created_at) values
+    (v_tenant, repeat('3',64), now() - interval '25 hours'),
+    (v_tenant, repeat('4',64), now() - interval '5 minutes');
+  insert into public.public_order_idempotency(tenant_id, idempotency_key, request_hash, order_id, created_at) values
+    (v_tenant, '77777777-7777-4777-8777-777777777771', repeat('7',64), v_order, now() - interval '8 days'),
+    (v_tenant, '77777777-7777-4777-8777-777777777772', repeat('7',64), v_order, now() - interval '1 day');
+
+  perform public.cleanup_public_order_retention(v_tenant);
+
+  if exists (select 1 from public.public_order_ip_limits where tenant_id=v_tenant and ip_hash=repeat('1',64)) then
+    raise exception 'stale_ip_limit_row_was_not_deleted';
+  end if;
+  if not exists (select 1 from public.public_order_ip_limits where tenant_id=v_tenant and ip_hash=repeat('2',64)) then
+    raise exception 'recent_ip_limit_row_was_deleted';
+  end if;
+  if exists (select 1 from public.public_order_rate_limits where tenant_id=v_tenant and phone_hash=repeat('3',64)) then
+    raise exception 'stale_phone_limit_row_was_not_deleted';
+  end if;
+  if not exists (select 1 from public.public_order_rate_limits where tenant_id=v_tenant and phone_hash=repeat('4',64)) then
+    raise exception 'recent_phone_limit_row_was_deleted';
+  end if;
+  if exists (select 1 from public.public_order_idempotency
+      where tenant_id=v_tenant and idempotency_key='77777777-7777-4777-8777-777777777771') then
+    raise exception 'expired_idempotency_row_was_not_deleted';
+  end if;
+  if not exists (select 1 from public.public_order_idempotency
+      where tenant_id=v_tenant and idempotency_key='77777777-7777-4777-8777-777777777772') then
+    raise exception 'idempotency_row_inside_replay_window_was_deleted';
+  end if;
 end;
-$$;
+$;
 
 rollback;
