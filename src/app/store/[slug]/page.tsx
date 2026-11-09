@@ -82,7 +82,7 @@ export default function StorefrontPage() {
   );
 
   function add(item: MenuItem) {
-    const key = item.name;
+    const key = item.id;
     setCart((current) => {
       const found = current.find((line) => line.key === key);
       if (found) return current.map((line) =>
