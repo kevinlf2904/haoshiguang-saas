@@ -33,8 +33,17 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(page.getByRole("heading", { name: "老張麵店" })).toBeVisible();
   await expect(page.getByText("海鮮湯麵", { exact: true })).toHaveCount(0);
   await admin.from("products").update({ is_available: true }).eq("id", soldOut!.id);
+
+  const { data: soupCategory } = await admin.from("categories").select("id")
+    .eq("tenant_id", tenant!.id).eq("name", "湯類").single();
+  expect(soupCategory).not.toBeNull();
+  await admin.from("categories").update({ is_active: false }).eq("id", soupCategory!.id);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "湯類", exact: true })).toHaveCount(0);
+  await admin.from("categories").update({ is_active: true }).eq("id", soupCategory!.id);
   await page.reload();
   await expect(page.getByText("海鮮湯麵", { exact: true })).toBeVisible();
+  await expect(page.locator(".menu-count")).toContainText("27");
 
   // Merchant signs in and pauses orders through the actual settings UI.
   await page.goto("/merchant/login");
@@ -43,6 +52,7 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await page.getByRole("button", { name: "登入管理後台" }).click();
   await page.goto("/merchant/settings");
   await expect(page.getByRole("heading", { name: "營業設定" })).toBeVisible();
+  await page.locator('input[type="number"]').fill("35");
   await page.getByRole("button", { name: "接單中 · 點擊暫停" }).click();
   await page.getByRole("button", { name: "儲存營業設定" }).click();
   await expect(page.getByRole("status")).toContainText("營業設定已儲存");
@@ -81,7 +91,7 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(page.getByRole("status")).toContainText("營業設定已儲存");
 
   await page.goto("/store/laozhang");
-  await expect(page.getByText("線上接單中", { exact: false })).toBeVisible();
+  await expect(page.getByText("線上接單中 · 預計備餐 35 分鐘")).toBeVisible();
   await page.getByRole("button", { name: "加入海鮮湯麵" }).click();
   await page.getByLabel("稱呼").fill(customerName);
   await page.getByLabel("聯絡電話").fill("0912345678");
