@@ -63,13 +63,24 @@ export async function POST(request: NextRequest) {
     return json("餐點資料有誤，請重新確認購物車。", 400);
   }
 
+  const idempotencyKey = request.headers.get("idempotency-key") || "";
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) {
+    return json("訂單識別碼無效，請重新送出。", 400);
+  }
+  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "";
+  const vercelForwardedFor = request.headers.get("x-vercel-forwarded-for")?.trim() || "";
+  const clientIp = vercelForwardedFor || forwardedFor;
+  if (!clientIp || clientIp.length > 128) return json("無法確認連線來源，請稍後再試。", 400);
+  const ipHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(clientIp))
+    .then(buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 32));
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !publishableKey) {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
     return json("訂單服務尚未設定，請稍後再試。", 503);
   }
 
-  const supabase = createClient(supabaseUrl, publishableKey, {
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await supabase.rpc("create_public_order", {
@@ -80,6 +91,8 @@ export async function POST(request: NextRequest) {
     p_table_label: body.tableLabel?.trim() || null,
     p_note: body.note?.trim() || "",
     p_items: items,
+    p_idempotency_key: idempotencyKey,
+    p_client_ip_hash: ipHash,
   });
 
   if (error) {
@@ -87,6 +100,7 @@ export async function POST(request: NextRequest) {
     if (error.message.includes("store_closed")) return json("目前不在店家營業時間或為公休日，暫時無法送出訂單。", 409);
     if (error.message.includes("item_unavailable_or_invalid")) return json("部分餐點已停售或資料有變動，請重新整理菜單。", 409);
     if (error.message.includes("order_rate_limited")) return json("送單次數過於頻繁，請 10 分鐘後再試。", 429);
+    if (error.message.includes("order_ip_rate_limited")) return json("目前連線送單過於頻繁，請 10 分鐘後再試。", 429);
     if (error.message.includes("order_total_exceeds_limit")) return json("訂單金額超過系統允許上限，請聯絡店家。", 400);
     if (error.code === "22023") return json("訂單資料不完整或格式有誤，請重新確認。", 400);
     return json("訂單暫時無法建立，請稍後再試。", 500);
