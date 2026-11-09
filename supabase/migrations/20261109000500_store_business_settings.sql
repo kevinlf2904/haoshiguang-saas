@@ -36,14 +36,14 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $trigger$
 begin
   insert into public.store_settings (tenant_id)
   values (new.id)
   on conflict (tenant_id) do nothing;
   return new;
 end;
-$;
+$trigger$;
 
 revoke all on function public.create_default_store_settings() from public, anon, authenticated;
 create trigger tenants_create_store_settings
