@@ -2,7 +2,7 @@
 create table public.public_order_idempotency (
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   idempotency_key uuid not null,
-  request_hash text not null check (length(request_hash) = 64 and request_hash ~ '^[a-f0-9]+
+  request_hash text not null check (length(request_hash) = 64 and request_hash ~ '^[a-f0-9]+$'),
   created_at timestamptz not null default now(),
   primary key (tenant_id, idempotency_key)
 );
