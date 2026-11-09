@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import menuData from "../../../../data/laozhang-menu.json";
 import "./storefront.css";
 
 type MenuItem = (typeof menuData.menu)[number];
 type CartLine = { key: string; item: MenuItem; quantity: number };
+type StoreSettings = { is_accepting_orders: boolean; prep_time_minutes: number; weekly_hours: Record<string, { open: string; close: string }[]>; closed_dates: string[] };
 
 const money = (value: number) => new Intl.NumberFormat("zh-TW", {
   style: "currency", currency: "TWD", maximumFractionDigits: 0,
@@ -26,6 +27,35 @@ export default function StorefrontPage() {
   const [submitting, setSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [confirmedOrder, setConfirmedOrder] = useState<{ order_number: number; total: number } | null>(null);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/store-settings?slug=" + encodeURIComponent(params.slug), { cache: "no-store" })
+      .then(async response => {
+        const result = await response.json() as { settings?: StoreSettings };
+        if (!response.ok || !result.settings) throw new Error("settings_unavailable");
+        if (active) setStoreSettings(result.settings);
+      })
+      .catch(() => { if (active) setSettingsError(true); })
+      .finally(() => { if (active) setSettingsLoading(false); });
+    return () => { active = false; };
+  }, [params.slug]);
+
+  const isOpenNow = useMemo(() => {
+    if (!storeSettings) return false;
+    if (!storeSettings.is_accepting_orders) return false;
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    const get = (type: string) => parts.find(part => part.type === type)?.value || "";
+    const date = get("year") + "-" + get("month") + "-" + get("day");
+    if (storeSettings.closed_dates.includes(date)) return false;
+    if (!Object.keys(storeSettings.weekly_hours || {}).length) return true;
+    const day = get("weekday").toLowerCase().slice(0, 3);
+    const time = get("hour") + ":" + get("minute");
+    return (storeSettings.weekly_hours[day] || []).some(slot => time >= slot.open && time < slot.close);
+  }, [storeSettings]);
 
   const visibleItems = menuData.menu.filter((item) => item.category === activeCategory);
   const count = cart.reduce((sum, line) => sum + line.quantity, 0);
@@ -47,6 +77,7 @@ export default function StorefrontPage() {
 
   async function submitOrder() {
     setCheckoutError("");
+    if (settingsLoading || settingsError || !isOpenNow) return setCheckoutError("店家目前未開放線上接單，請稍後再試。");
     if (cart.length === 0) return setCheckoutError("請先選擇餐點。");
     if (!customerName.trim() || !customerPhone.trim()) return setCheckoutError("請填寫稱呼及聯絡電話。");
     if (fulfillment === "dine_in" && !tableLabel.trim()) return setCheckoutError("內用請填寫桌號。");
@@ -104,6 +135,9 @@ export default function StorefrontPage() {
           <div className="store-meta">
             <span>⌖ {menuData.tenant.address}</span>
             <a href={`tel:${menuData.tenant.phone}`}>☎ {menuData.tenant.phone}</a>
+          </div>
+          <div className={`store-order-status ${settingsLoading ? "loading" : isOpenNow ? "open" : "closed"}`} role="status">
+            {settingsLoading ? "正在確認營業狀態…" : settingsError ? "營業資訊暫時無法讀取" : isOpenNow ? `線上接單中 · 預計備餐 ${storeSettings?.prep_time_minutes ?? 20} 分鐘` : "目前暫停線上接單"}
           </div>
         </div>
         <div className="hero-stamp"><span>好食光</span><b>GOOD<br/>FOOD<br/>GOOD DAY</b></div>
@@ -173,9 +207,9 @@ export default function StorefrontPage() {
           {confirmedOrder ? (
             <div className="checkout-result" role="status"><strong>訂單已建立</strong><b>訂單編號 #{confirmedOrder.order_number}</b><span>應付金額 {money(confirmedOrder.total)}</span><small>請向店家確認接單狀態；目前僅支援現場付款。</small><button onClick={() => setConfirmedOrder(null)}>繼續點餐</button></div>
           ) : (
-            <><button className="checkout-button" onClick={submitOrder} disabled={submitting || cart.length === 0}>{submitting ? "正在送出…" : "送出訂單"} <span>→</span></button>
+            <><button className="checkout-button" onClick={submitOrder} disabled={submitting || settingsLoading || settingsError || !isOpenNow || cart.length === 0}>{submitting ? "正在送出…" : "送出訂單"} <span>→</span></button>
             {checkoutError && <p className="checkout-error" role="alert">{checkoutError}</p>}
-            <p className="checkout-hint">送出後會建立待確認訂單；目前僅支援現場付款，尚未串接線上金流。</p></>
+            <p className="checkout-hint">{settingsLoading ? "正在確認店家營業狀態…" : settingsError ? "暫時無法確認營業資訊，請稍後重試。" : !isOpenNow ? "店家目前未開放線上接單，您可以先瀏覽菜單。" : `預計備餐時間約 ${storeSettings?.prep_time_minutes ?? 20} 分鐘。送出後會建立待確認訂單；目前僅支援現場付款。`}</p></>
           )}
         </aside>
       </div>
