@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import menuData from "../../../../data/laozhang-menu.json";
 import "./storefront.css";
 
-type MenuItem = (typeof menuData.menu)[number];
+type MenuItem = { id: string; category_id: string; name: string; description: string; price: number; is_available: boolean; sort_order: number };
+type StoreCategory = { id: string; name: string; sort_order: number; is_active: boolean };
+type StoreTenant = { id: string; name: string; slug: string; phone: string | null; address: string | null };
 type CartLine = { key: string; item: MenuItem; quantity: number };
 type StoreSettings = { is_accepting_orders: boolean; prep_time_minutes: number; weekly_hours: Record<string, { open: string; close: string }[]>; closed_dates: string[] };
 
@@ -16,8 +17,10 @@ const money = (value: number) => new Intl.NumberFormat("zh-TW", {
 
 export default function StorefrontPage() {
   const params = useParams<{ slug: string }>();
-  const categories = [...new Set(menuData.menu.map((item) => item.category))];
-  const [activeCategory, setActiveCategory] = useState(categories[0]);
+  const [categories, setCategories] = useState<StoreCategory[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [tenant, setTenant] = useState<StoreTenant | null>(null);
+  const [activeCategory, setActiveCategory] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [fulfillment, setFulfillment] = useState<"takeaway" | "dine_in">("takeaway");
   const [tableLabel, setTableLabel] = useState("");
@@ -31,14 +34,26 @@ export default function StorefrontPage() {
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState(false);
+  const [clockNow, setClockNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
     fetch("/api/store-settings?slug=" + encodeURIComponent(params.slug), { cache: "no-store" })
       .then(async response => {
-        const result = await response.json() as { settings?: StoreSettings };
-        if (!response.ok || !result.settings) throw new Error("settings_unavailable");
-        if (active) setStoreSettings(result.settings);
+        const result = await response.json() as { tenant?: StoreTenant; settings?: StoreSettings; categories?: StoreCategory[]; products?: MenuItem[] };
+        if (!response.ok || !result.settings || !result.tenant) throw new Error("storefront_unavailable");
+        if (active) {
+          setTenant(result.tenant);
+          setStoreSettings(result.settings);
+          setCategories(result.categories || []);
+          setMenuItems(result.products || []);
+          setActiveCategory(result.categories?.[0]?.id || "");
+        }
       })
       .catch(() => { if (active) setSettingsError(true); })
       .finally(() => { if (active) setSettingsLoading(false); });
@@ -56,9 +71,10 @@ export default function StorefrontPage() {
     const day = get("weekday").toLowerCase().slice(0, 3);
     const time = get("hour") + ":" + get("minute");
     return (storeSettings.weekly_hours[day] || []).some(slot => time >= slot.open && time < slot.close);
-  }, [storeSettings]);
+  }, [storeSettings, clockNow]);
 
-  const visibleItems = menuData.menu.filter((item) => item.category === activeCategory);
+  const visibleItems = menuItems.filter((item) => item.category_id === activeCategory);
+  const activeCategoryName = categories.find(category => category.id === activeCategory)?.name || "";
   const count = cart.reduce((sum, line) => sum + line.quantity, 0);
   const subtotal = useMemo(
     () => cart.reduce((sum, line) => sum + line.item.price * line.quantity, 0),
@@ -94,7 +110,7 @@ export default function StorefrontPage() {
           fulfillment,
           tableLabel,
           note,
-          items: cart.map((line) => ({ name: line.item.name, category: line.item.category, quantity: line.quantity })),
+          items: cart.map((line) => ({ name: line.item.name, category: categories.find(category => category.id === line.item.category_id)?.name || "", quantity: line.quantity })),
         }),
       });
       const result = await response.json() as { order?: { order_number: number; total: number }; error?: string };
@@ -114,8 +130,8 @@ export default function StorefrontPage() {
       .filter((line) => line.quantity > 0));
   }
 
-  if (params.slug !== menuData.tenant.slug) {
-    return <main className="order-shell"><section className="store-option-note"><strong>找不到這間店</strong><span>請確認店家網址是否正確。</span></section></main>;
+  if (settingsError && !tenant) {
+    return <main className="order-shell"><section className="store-option-note"><strong>店家資訊暫時無法讀取</strong><span>請稍後重新整理頁面。</span></section></main>;
   }
 
   return (
@@ -131,11 +147,11 @@ export default function StorefrontPage() {
       <section className="store-hero">
         <div className="store-hero-copy">
           <span className="eyebrow">LOCAL FAVORITE · SINYI DISTRICT</span>
-          <h1>{menuData.tenant.name}</h1>
+          <h1>{tenant?.name || "好食光店家"}</h1>
           <p>一碗熱騰騰的好味道，今天也替你好好準備。</p>
           <div className="store-meta">
-            <span>⌖ {menuData.tenant.address}</span>
-            <a href={`tel:${menuData.tenant.phone}`}>☎ {menuData.tenant.phone}</a>
+            <span>⌖ {tenant?.address || "店家地址尚未設定"}</span>
+            {tenant?.phone && <a href={`tel:${tenant.phone}`}>☎ {tenant.phone}</a>}
           </div>
           <div className={`store-order-status ${settingsLoading ? "loading" : isOpenNow ? "open" : "closed"}`} role="status">
             {settingsLoading ? "正在確認營業狀態…" : settingsError ? "營業資訊暫時無法讀取" : isOpenNow ? `線上接單中 · 預計備餐 ${storeSettings?.prep_time_minutes ?? 20} 分鐘` : "目前暫停線上接單"}
@@ -148,22 +164,22 @@ export default function StorefrontPage() {
         <section className="menu-section">
           <div className="section-heading">
             <div><span className="eyebrow">OUR MENU</span><h2>今天想吃點什麼？</h2></div>
-            <span className="menu-count">{menuData.menu.length} 道好味道</span>
+            <span className="menu-count">{menuItems.length} 道好味道</span>
           </div>
           <nav className="category-tabs" aria-label="菜單分類">
             {categories.map((category) => (
-              <button key={category} className={activeCategory === category ? "active" : ""}
-                onClick={() => setActiveCategory(category)}>{category}</button>
+              <button key={category.id} className={activeCategory === category.id ? "active" : ""}
+                onClick={() => setActiveCategory(category.id)}>{category.name}</button>
             ))}
           </nav>
           <div className="menu-grid">
             {visibleItems.map((item) => (
-              <article className="menu-card" key={item.name}>
-                <div className="dish-art" aria-hidden="true"><span>{item.category === "小菜" ? "🥢" : item.category === "飯類" ? "🍚" : "🍜"}</span></div>
+              <article className="menu-card" key={item.id}>
+                <div className="dish-art" aria-hidden="true"><span>{activeCategoryName === "小菜" ? "🥢" : activeCategoryName.includes("飯") ? "🍚" : "🍜"}</span></div>
                 <div className="dish-info">
                   <div className="dish-title-row"><h3>{item.name}</h3><strong>{money(item.price)}</strong></div>
                   {item.description ? <p>{item.description}</p> : <p className="dish-subtle">店家每日新鮮製作</p>}
-                  <button className="add-button" onClick={() => add(item)} aria-label={`加入${item.name}`}>＋ 加入</button>
+                  <button className="add-button" onClick={() => add(item)} disabled={!isOpenNow || settingsLoading} aria-label={`加入${item.name}`}>＋ 加入</button>
                 </div>
               </article>
             ))}
