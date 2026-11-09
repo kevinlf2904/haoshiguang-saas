@@ -33,10 +33,10 @@ grant execute on function auth.uid() to anon, authenticated;
 SQL
 
 echo "Applying isolated schema migrations..."
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0001_initial.sql
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0002_secure_public_checkout.sql
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0003_merchant_catalog_permissions.sql
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0004_store_business_settings.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261109000100_initial.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261109000300_secure_public_checkout.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261109000400_merchant_catalog_permissions.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261109000500_store_business_settings.sql
 
 echo "Seeding pilot catalog..."
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
