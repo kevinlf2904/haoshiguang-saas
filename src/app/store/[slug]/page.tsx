@@ -11,9 +11,7 @@ type StoreTenant = { id: string; name: string; slug: string; phone: string | nul
 type CartLine = { key: string; item: MenuItem; quantity: number };
 type StoreSettings = { is_accepting_orders: boolean; prep_time_minutes: number; weekly_hours: Record<string, { open: string; close: string }[]>; closed_dates: string[] };
 
-const money = (value: number) => new Intl.NumberFormat("zh-TW", {
-  style: "currency", currency: "TWD", maximumFractionDigits: 0,
-}).format(value);
+const money = (value: number) => `NT${Math.round(value).toLocaleString("zh-TW")}`;
 
 export default function StorefrontPage() {
   const params = useParams<{ slug: string }>();
@@ -115,7 +113,11 @@ export default function StorefrontPage() {
       });
       const result = await response.json() as { order?: { order_number: number; total: number }; error?: string };
       if (!response.ok || !result.order) throw new Error(result.error || "訂單建立失敗，請稍後再試。");
-      setConfirmedOrder(result.order);
+      const confirmedTotal = Number(result.order.total);
+      if (!Number.isFinite(confirmedTotal) || confirmedTotal < 0) {
+        throw new Error("訂單已送出，但金額資料異常，請聯絡店家確認。");
+      }
+      setConfirmedOrder({ ...result.order, total: confirmedTotal });
       setCart([]);
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : "網路連線異常，請稍後再試。");
