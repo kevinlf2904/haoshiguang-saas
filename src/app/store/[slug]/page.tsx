@@ -41,6 +41,11 @@ export default function StorefrontPage() {
   }, []);
 
   useEffect(() => {
+    const savedKey = window.sessionStorage.getItem("haoshiguang_checkout_idempotency:" + params.slug);
+    if (savedKey) setIdempotencyKey(savedKey);
+  }, [params.slug]);
+
+  useEffect(() => {
     let active = true;
     fetch("/api/store-settings?slug=" + encodeURIComponent(params.slug), { cache: "no-store" })
       .then(async response => {
@@ -101,6 +106,7 @@ export default function StorefrontPage() {
     try {
       const requestKey = idempotencyKey || crypto.randomUUID();
       if (!idempotencyKey) setIdempotencyKey(requestKey);
+      window.sessionStorage.setItem("haoshiguang_checkout_idempotency:" + params.slug, requestKey);
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey },
@@ -123,6 +129,7 @@ export default function StorefrontPage() {
       setConfirmedOrder({ ...result.order, total: confirmedTotal });
       setCart([]);
       setIdempotencyKey("");
+      window.sessionStorage.removeItem("haoshiguang_checkout_idempotency:" + params.slug);
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : "網路連線異常，請稍後再試。");
     } finally {
