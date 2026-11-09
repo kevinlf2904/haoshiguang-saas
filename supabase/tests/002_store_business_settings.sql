@@ -35,13 +35,13 @@ select o.id,o.tenant_id,'隔離測試商品',o.total,1,o.total
 from public.orders o
 where o.customer_name in ('店家 A 顧客','店家 B 顧客');
 
-if not exists (select 1 from pg_roles where rolname='anon') then
-  raise exception 'anon role missing';
-end if;
-if has_table_privilege('anon','public.orders','SELECT')
-   or has_table_privilege('anon','public.order_items','SELECT') then
-  raise exception 'anon must not have direct SELECT privilege on orders or order_items';
-end if;
+do $$
+begin
+  if has_table_privilege('anon','public.orders','SELECT')
+     or has_table_privilege('anon','public.order_items','SELECT') then
+    raise exception 'anon must not have direct SELECT privilege on orders or order_items';
+  end if;
+end $$;
 
 -- Public anon reads only active tenants' settings; inactive tenant data stays hidden.
 update public.tenants set is_active=false
