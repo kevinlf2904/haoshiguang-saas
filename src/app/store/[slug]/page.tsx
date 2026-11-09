@@ -24,6 +24,9 @@ export default function StorefrontPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [note, setNote] = useState("");
   const [showCart, setShowCart] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [confirmedOrder, setConfirmedOrder] = useState<{ order_number: number; total: number } | null>(null);
 
   const visibleItems = menuData.menu.filter((item) => item.category === activeCategory);
   const count = cart.reduce((sum, line) => sum + line.quantity, 0);
@@ -41,6 +44,37 @@ export default function StorefrontPage() {
       );
       return [...current, { key, item, quantity: 1 }];
     });
+  }
+
+  async function submitOrder() {
+    setCheckoutError("");
+    if (cart.length === 0) return setCheckoutError("請先選擇餐點。");
+    if (!customerName.trim() || !customerPhone.trim()) return setCheckoutError("請填寫稱呼及聯絡電話。");
+    if (fulfillment === "dine_in" && !tableLabel.trim()) return setCheckoutError("內用請填寫桌號。");
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeSlug: params.slug,
+          customerName,
+          customerPhone,
+          fulfillment,
+          tableLabel,
+          note,
+          items: cart.map((line) => ({ name: line.item.name, category: line.item.category, quantity: line.quantity })),
+        }),
+      });
+      const result = await response.json() as { order?: { order_number: number; total: number }; error?: string };
+      if (!response.ok || !result.order) throw new Error(result.error || "訂單建立失敗，請稍後再試。");
+      setConfirmedOrder(result.order);
+      setCart([]);
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "網路連線異常，請稍後再試。");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function changeQuantity(key: string, delta: number) {
@@ -137,8 +171,13 @@ export default function StorefrontPage() {
             <label className="field-label">備註（選填）<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="例如：不要香菜、餐具不用..." rows={2}/></label>
           </div>
           <div className="cart-total"><span>商品小計</span><strong>{money(subtotal)}</strong></div>
-          <button className="checkout-button" disabled>線上送出訂單 <span>→</span></button>
-          <p className="checkout-hint">目前為點餐介面開發版，雲端訂單 API 尚未啟用，暫不會送出或收取款項。</p>
+          {confirmedOrder ? (
+            <div className="checkout-result" role="status"><strong>訂單已建立</strong><b>訂單編號 #{confirmedOrder.order_number}</b><span>應付金額 {money(confirmedOrder.total)}</span><small>請向店家確認接單狀態；目前僅支援現場付款。</small><button onClick={() => setConfirmedOrder(null)}>繼續點餐</button></div>
+          ) : (
+            <><button className="checkout-button" onClick={submitOrder} disabled={submitting || cart.length === 0}>{submitting ? "正在送出…" : "送出訂單"} <span>→</span></button>
+            {checkoutError && <p className="checkout-error" role="alert">{checkoutError}</p>}
+            <p className="checkout-hint">送出後會建立待確認訂單；目前僅支援現場付款，尚未串接線上金流。</p></>
+          )}
         </aside>
       </div>
       <footer className="store-footer"><strong>好食光</strong><span>讓每一餐，都剛剛好。</span><small>此為試點建置頁面，尚未開放正式接單。</small></footer>
