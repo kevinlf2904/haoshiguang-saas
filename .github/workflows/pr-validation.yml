@@ -2,9 +2,9 @@ name: PR validation
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/pilot-foundation-hardening, feat/customer-ordering-storefront]
   push:
-    branches: [feat/pilot-foundation-hardening]
+    branches: [feat/pilot-foundation-hardening, feat/customer-ordering-storefront, feat/secure-order-checkout]
 
 permissions:
   contents: read
@@ -33,8 +33,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      # This repository currently has no committed package-lock.json.
-      # Generate a lockfile on the runner so npm ci is still exercised.
+      # Generate or refresh the lockfile on the runner so npm ci is exercised consistently.
       - name: Generate npm lockfile
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Export generated lockfile for pinning
