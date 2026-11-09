@@ -92,6 +92,40 @@ begin
     raise exception 'store_unavailable' using errcode = 'P0002';
   end if;
 
+  -- Preserve the canonical store business-settings enforcement from migration 005.
+  -- Lock the settings row so a concurrent pause/schedule update cannot race checkout.
+  declare
+    v_settings public.store_settings%rowtype;
+    v_local_now timestamp;
+    v_day_key text;
+    v_slots jsonb;
+  begin
+    select * into v_settings
+    from public.store_settings
+    where tenant_id = v_tenant_id
+    for share;
+
+    if found then
+      if not v_settings.is_accepting_orders then
+        raise exception 'store_unavailable' using errcode = 'P0002';
+      end if;
+      v_local_now := now() at time zone 'Asia/Taipei';
+      if v_local_now::date = any(v_settings.closed_dates) then
+        raise exception 'store_closed' using errcode = 'P0002';
+      end if;
+      if v_settings.weekly_hours <> '{}'::jsonb then
+        v_day_key := case extract(isodow from v_local_now)::integer
+          when 1 then 'mon' when 2 then 'tue' when 3 then 'wed'
+          when 4 then 'thu' when 5 then 'fri' when 6 then 'sat'
+          else 'sun' end;
+        v_slots := coalesce(v_settings.weekly_hours -> v_day_key, '[]'::jsonb);
+        if not public.is_within_business_slots(v_slots, v_local_now::time) then
+          raise exception 'store_closed' using errcode = 'P0002';
+        end if;
+      end if;
+    end if;
+  end;
+
   -- Lock all referenced active catalog rows before pricing and snapshot insertion.
   -- Concurrent price edits or sell-outs wait until this transaction completes.
   for v_item in select value from jsonb_array_elements(p_items) loop
