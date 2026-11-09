@@ -37,7 +37,7 @@ jobs:
         run: supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta
 
       - name: Reset isolated database and apply all migrations
-        run: supabase db reset --local
+        run: supabase db reset
 
       - name: Export local Supabase connection values
         shell: bash
