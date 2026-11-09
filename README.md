@@ -26,3 +26,15 @@
 - 前端只使用 Supabase anon/publishable key；service role 僅限可信任伺服器環境。
 - 所有店家資料表以 tenant_id 隔離並啟用 RLS。
 - 訂單金額必須由伺服器／資料庫依商品現價計算，不信任瀏覽器傳入價格。
+
+## 本機 PostgreSQL 驗證（僅限 disposable local DB）
+
+目前無法從 Git repository 判定 migration 0001 是否已套用到任何 Supabase 環境；migration 檔案本身不包含環境執行紀錄。請勿以修改舊 migration 取代已部署環境的升級。商品唯一約束由後續 migration `0002_product_identity_unique.sql` 加入，若既有資料有重複商品，migration 會停止並列出需要人工處理的原因，不會自動刪除資料。
+
+建立一個可丟棄的本機 PostgreSQL database 後，執行：
+
+```bash
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/haoshiguang_test bash scripts/test-db.sh
+```
+
+腳本只接受 localhost、127.0.0.1 或 ::1，並依序執行 0001、0002、Seed 兩次，以及停售保留／商品唯一性斷言。**不要將正式 Supabase URL 放入 TEST_DATABASE_URL。** 測試資料會寫入指定的本機測試資料庫，建議使用全新且可丟棄的 database。
