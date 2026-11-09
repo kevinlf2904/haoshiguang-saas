@@ -34,14 +34,16 @@ begin
   for i in 1..5 loop
     perform public.create_public_order(
       'laozhang', '限流測試', '0987654321', 'takeaway', null, '',
-      '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb
+      '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
+      ('22222222-2222-4222-8222-' || lpad(i::text,12,'0'))::uuid, repeat('b',32)
     );
   end loop;
 
   begin
     perform public.create_public_order(
       'laozhang', '限流測試', '0987654321', 'takeaway', null, '',
-      '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb
+      '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
+      '33333333-3333-4333-8333-333333333333'::uuid, repeat('c',32)
     );
   exception when sqlstate 'P0001' then
     v_rejected := true;
