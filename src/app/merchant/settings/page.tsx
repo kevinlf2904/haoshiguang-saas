@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -102,8 +103,8 @@ export default function MerchantSettingsPage() {
   const canManage = ["owner", "manager"].includes(memberships.find(item => item.tenant_id === tenantId)?.role || "");
 
   return <main className="merchant-settings-shell">
-    <header className="merchant-settings-header"><a href="/" className="merchant-settings-brand">好食光 <span>店家管理</span></a>
-      <nav><a href="/merchant/orders">訂單管理</a><a href="/merchant/products">商品管理</a><button onClick={signOut}>登出</button></nav></header>
+    <header className="merchant-settings-header"><Link href="/" className="merchant-settings-brand">好食光 <span>店家管理</span></Link>
+      <nav><Link href="/merchant/orders">訂單管理</Link><Link href="/merchant/products">商品管理</Link><button onClick={signOut}>登出</button></nav></header>
     <section className="merchant-settings-intro"><span>STORE OPERATIONS</span><h1>營業設定</h1><p>設定每週營業時間、公休日、接單開關與預計備餐時間。</p>
       {memberships.length > 1 && <label>管理店家<select value={tenantId} onChange={event => { setTenantId(event.target.value); void load(event.target.value); }}>{memberships.map(item => item.tenants && <option key={item.tenant_id} value={item.tenant_id}>{item.tenants.name}</option>)}</select></label>}
       {selected && <small>目前店家：{selected.name}</small>}
