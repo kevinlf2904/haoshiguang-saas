@@ -34,7 +34,7 @@ jobs:
           version: latest
 
       - name: Start disposable local Supabase
-        run: supabase start -x studio,edge-runtime,logflare,vector
+        run: supabase start -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta
 
       - name: Reset isolated database and apply all migrations
         run: supabase db reset --local
