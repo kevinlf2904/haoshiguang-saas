@@ -3,14 +3,9 @@ set -euo pipefail
 
 : "${TEST_DATABASE_URL:?Set TEST_DATABASE_URL to a disposable local PostgreSQL database}"
 
-# Never permit a hosted Supabase/PostgreSQL endpoint for this test helper.
-case "$TEST_DATABASE_URL" in
-  *localhost*|*127.0.0.1*|*\[::1\]*) ;;
-  *)
-    echo "Refusing to run: TEST_DATABASE_URL must point to localhost/127.0.0.1/::1." >&2
-    exit 2
-    ;;
-esac
+# Validate the parsed authority hostname exactly. Do this before checking for
+# psql or making any database connection.
+node scripts/assert-local-db-url.mjs "$TEST_DATABASE_URL"
 
 command -v psql >/dev/null 2>&1 || {
   echo "psql is required. Install PostgreSQL client tools first." >&2
