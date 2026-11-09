@@ -98,6 +98,21 @@ begin
   if affected <> 0 then
     raise exception 'tenant A must not update tenant B orders';
   end if;
+  update public.categories set name='跨店非法修改' where tenant_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and name='B 專屬分類';
+  get diagnostics affected = row_count;
+  if affected <> 0 then
+    raise exception 'tenant A must not update tenant B categories';
+  end if;
+  update public.products set price=1 where tenant_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and name='B 專屬商品';
+  get diagnostics affected = row_count;
+  if affected <> 0 then
+    raise exception 'tenant A must not update tenant B products';
+  end if;
+  if has_table_privilege('authenticated','public.memberships','INSERT')
+     or has_table_privilege('authenticated','public.memberships','UPDATE')
+     or has_table_privilege('authenticated','public.memberships','DELETE') then
+    raise exception 'authenticated users must not mutate tenant memberships directly';
+  end if;
 end $block$;
 do $block$
 declare affected integer;
