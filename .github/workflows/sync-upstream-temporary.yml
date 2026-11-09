@@ -1,0 +1,25 @@
+name: Temporary upstream branch synchronization
+
+on:
+  push:
+    branches:
+      - feat/merchant-product-management
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update PR branch from its latest base
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr update-branch 5 --repo "$GITHUB_REPOSITORY"
+          git fetch origin "$GITHUB_REF_NAME"
+          git reset --hard "origin/$GITHUB_REF_NAME"
