@@ -47,9 +47,9 @@ grant execute on function auth.uid() to anon, authenticated;
 SQL
 
 echo "Applying migration 0001..."
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0001_initial.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261109000100_initial.sql
 echo "Applying migration 0002..."
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0002_product_identity_unique.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261109000200_product_identity_unique.sql
 echo "Running pilot seed twice..."
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
