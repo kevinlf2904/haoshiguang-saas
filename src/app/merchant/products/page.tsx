@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import "./products.css";
 
 type Membership = { tenant_id: string; role: "owner" | "manager" | "staff"; tenants: { id: string; name: string; slug: string } | null };
@@ -28,6 +29,11 @@ export default function MerchantProductsPage() {
   const [newDescription, setNewDescription] = useState("");
   const [newPrice, setNewPrice] = useState("0");
   const [newCategoryId, setNewCategoryId] = useState("");
+  const [editingId, setEditingId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPrice, setEditPrice] = useState("0");
+  const [editCategoryId, setEditCategoryId] = useState("");
 
   const activeCategories = useMemo(() => categories.filter(category => category.is_active), [categories]);
   const visibleProducts = useMemo(() => products.filter(product => categoryFilter === "all" || product.category_id === categoryFilter), [products, categoryFilter]);
@@ -92,6 +98,16 @@ export default function MerchantProductsPage() {
     setNewName(""); setNewDescription(""); setNewPrice("0");
   }
 
+  function beginEdit(product: Product) {
+    setEditingId(product.id); setEditName(product.name); setEditDescription(product.description);
+    setEditPrice(String(product.price)); setEditCategoryId(product.category_id);
+  }
+
+  async function saveEdit(event: FormEvent<HTMLFormElement>, product: Product) {
+    event.preventDefault();
+    if (await save({ kind: "product", id: product.id, name: editName, description: editDescription, price: Number(editPrice), categoryId: editCategoryId }, "商品資料已更新。")) setEditingId("");
+  }
+
   async function toggleAvailability(product: Product) {
     await save({ kind: "product", id: product.id, isAvailable: !product.is_available }, product.is_available ? "商品已停售。" : "商品已恢復販售。");
   }
@@ -101,7 +117,6 @@ export default function MerchantProductsPage() {
   }
 
   async function signOut() {
-    const { createSupabaseBrowserClient } = await import("@/lib/supabase/browser");
     await createSupabaseBrowserClient().auth.signOut();
     router.replace("/merchant/login"); router.refresh();
   }
@@ -146,9 +161,17 @@ export default function MerchantProductsPage() {
           <div className="catalog-section-heading"><h2>商品列表</h2><span>{products.length} 項商品</span></div>
           <nav className="product-filters"><button className={categoryFilter === "all" ? "active" : ""} onClick={() => setCategoryFilter("all")}>全部</button>{activeCategories.map(category => <button key={category.id} className={categoryFilter === category.id ? "active" : ""} onClick={() => setCategoryFilter(category.id)}>{category.name}</button>)}</nav>
           {visibleProducts.length ? <div className="merchant-product-list">{visibleProducts.map(product => <article className="merchant-product-card" key={product.id}>
-            <div><strong>{product.name}</strong><span>{categories.find(category => category.id === product.category_id)?.name || "未分類"}</span>{product.description && <p>{product.description}</p>}</div>
-            <div className="merchant-product-price">{money(product.price)}<span className={product.is_available ? "available" : "unavailable"}>{product.is_available ? "販售中" : "已停售"}</span></div>
-            <button className={product.is_available ? "stop-selling" : "start-selling"} disabled={saving} onClick={() => void toggleAvailability(product)}>{product.is_available ? "設為停售" : "恢復販售"}</button>
+            {editingId === product.id ? <form className="product-edit-form" onSubmit={event => void saveEdit(event, product)}>
+              <label>商品名稱<input required maxLength={100} value={editName} onChange={event => setEditName(event.target.value)} /></label>
+              <label>分類<select required value={editCategoryId} onChange={event => setEditCategoryId(event.target.value)}>{activeCategories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+              <label>售價（元）<input type="number" min="0" max="10000000" step="1" required value={editPrice} onChange={event => setEditPrice(event.target.value)} /></label>
+              <label>商品描述<textarea rows={2} maxLength={500} value={editDescription} onChange={event => setEditDescription(event.target.value)} /></label>
+              <div className="product-edit-actions"><button type="submit" disabled={saving}>儲存修改</button><button type="button" className="cancel-edit" onClick={() => setEditingId("")}>取消</button></div>
+            </form> : <>
+              <div><strong>{product.name}</strong><span>{categories.find(category => category.id === product.category_id)?.name || "未分類"}</span>{product.description && <p>{product.description}</p>}</div>
+              <div className="merchant-product-price">{money(product.price)}<span className={product.is_available ? "available" : "unavailable"}>{product.is_available ? "販售中" : "已停售"}</span></div>
+              <div className="product-card-actions"><button className="edit-product" disabled={saving} onClick={() => beginEdit(product)}>編輯</button><button className={product.is_available ? "stop-selling" : "start-selling"} disabled={saving} onClick={() => void toggleAvailability(product)}>{product.is_available ? "設為停售" : "恢復販售"}</button></div>
+            </>}
           </article>)}</div> : <div className="products-empty">這個分類目前沒有商品。</div>}
         </section>
       </>}
