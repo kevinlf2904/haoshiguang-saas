@@ -73,7 +73,7 @@ reset role;
 -- Owner can update its own tenant settings.
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
-do $
+do $block$
 declare own_orders integer; foreign_orders integer; own_items integer; foreign_items integer;
 begin
   select count(*) into own_orders from public.orders where customer_name='店家 A 顧客';
@@ -83,8 +83,8 @@ begin
   if own_orders <> 1 or foreign_orders <> 0 or own_items <> 1 or foreign_items <> 0 then
     raise exception 'tenant A must read only its own orders and order items';
   end if;
-end $;
-do $
+end $block$;
+do $block$
 declare affected integer;
 begin
   update public.store_settings set prep_time_minutes=25
@@ -96,7 +96,7 @@ begin
   where tenant_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   get diagnostics affected = row_count;
   if affected <> 0 then raise exception 'owner must not update another tenant settings'; end if;
-end $$;
+end $block$;
 
 -- Manager can update; staff cannot.
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
