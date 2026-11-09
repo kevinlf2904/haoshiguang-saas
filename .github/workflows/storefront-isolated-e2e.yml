@@ -3,7 +3,7 @@ name: Isolated Supabase storefront E2E
 on:
   pull_request:
     branches:
-      - feat/merchant-business-settings
+      - feat/merchant-product-management
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
