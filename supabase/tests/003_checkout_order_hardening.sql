@@ -6,6 +6,7 @@ declare
   v_order uuid;
   v_count integer;
   v_rejected boolean := false;
+  v_ip_rejected boolean := false;
   v_first jsonb;
   v_second jsonb;
   i integer;
@@ -64,6 +65,25 @@ begin
   if v_first ->> 'id' <> v_second ->> 'id' then
     raise exception 'idempotency_did_not_return_original_order';
   end if;
+
+  -- Twenty successful orders from one source IP are allowed; the 21st is blocked.
+  for i in 1..20 loop
+    perform public.create_public_order(
+      'laozhang', 'IP限流測試', ('09' || lpad(i::text,8,'0')), 'takeaway', null, '',
+      '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
+      ('55555555-5555-4555-8555-' || lpad(i::text,12,'0'))::uuid, repeat('e',32)
+    );
+  end loop;
+  begin
+    perform public.create_public_order(
+      'laozhang', 'IP限流測試', '0999999999', 'takeaway', null, '',
+      '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
+      '66666666-6666-4666-8666-666666666666'::uuid, repeat('e',32)
+    );
+  exception when sqlstate 'P0001' then
+    v_ip_rejected := true;
+  end;
+  if not v_ip_rejected then raise exception 'ip_rate_limit_was_not_enforced'; end if;
 end;
 $$;
 
