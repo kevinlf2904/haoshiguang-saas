@@ -50,6 +50,9 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await page.getByLabel("電子郵件").fill(email);
   await page.getByLabel("密碼").fill(password);
   await page.getByRole("button", { name: "登入管理後台" }).click();
+  // The click resolves before the async sign-in handler finishes; wait for its redirect
+  // so Supabase SSR cookies are persisted before navigating to a protected page.
+  await expect(page).toHaveURL(/\/merchant\/orders$/);
   await page.goto("/merchant/settings");
   await expect(page.getByRole("heading", { name: "營業設定" })).toBeVisible();
   // Emit only non-secret auth diagnostics so CI distinguishes session, membership and UI failures.
