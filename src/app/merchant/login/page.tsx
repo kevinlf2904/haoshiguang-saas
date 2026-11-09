@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -31,7 +32,7 @@ export default function MerchantLoginPage() {
 
   return <main className="merchant-login-shell">
     <section className="merchant-login-card">
-      <a className="merchant-login-brand" href="/">好食光</a>
+      <Link className="merchant-login-brand" href="/">好食光</Link>
       <span className="merchant-login-kicker">MERCHANT PORTAL</span>
       <h1>店家管理登入</h1>
       <p>登入後即可查看所屬店家的訂單。帳號權限由店家管理員授予。</p>
