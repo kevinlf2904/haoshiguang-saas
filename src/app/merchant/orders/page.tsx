@@ -85,7 +85,7 @@ export default function MerchantOrdersPage() {
   return <main className="merchant-orders-shell">
     <header className="merchant-orders-header">
       <a href="/" className="merchant-orders-brand">好食光 <span>店家管理</span></a>
-      <div><button className="refresh-button" onClick={() => void loadOrders()}>重新整理</button><button className="signout-button" onClick={signOut}>登出</button></div>
+      <div><a className="refresh-button" href="/merchant/products">商品管理</a><a className="refresh-button" href="/merchant/settings">營業設定</a><button className="signout-button" onClick={signOut}>登出</button></div>
     </header>
     <section className="merchant-orders-intro">
       <div><span className="merchant-orders-kicker">ORDER MANAGEMENT</span><h1>訂單管理</h1><p>即時查看顧客訂單，並更新備餐進度。</p></div>
