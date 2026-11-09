@@ -159,6 +159,6 @@ begin
     raise exception 'idempotency_row_inside_replay_window_was_deleted';
   end if;
 end;
-$;
+$$;
 
 rollback;
