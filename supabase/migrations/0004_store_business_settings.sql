@@ -31,6 +31,25 @@ insert into public.store_settings (tenant_id)
 select id from public.tenants
 on conflict (tenant_id) do nothing;
 
+create or replace function public.is_within_business_slots(p_slots jsonb, p_local_time time)
+returns boolean
+language plpgsql
+immutable
+set search_path = ''
+as $
+begin
+  if jsonb_typeof(p_slots) <> 'array' then return false; end if;
+  return exists (
+    select 1
+    from jsonb_array_elements(p_slots) slot
+    where p_local_time >= (slot ->> 'open')::time
+      and p_local_time < (slot ->> 'close')::time
+  );
+exception when others then
+  return false;
+end;
+$;
+
 create or replace function public.create_public_order(
   p_tenant_slug text,
   p_customer_name text,
@@ -102,12 +121,7 @@ begin
         when 4 then 'thu' when 5 then 'fri' when 6 then 'sat'
         else 'sun' end;
       v_slots := coalesce(v_settings.weekly_hours -> v_day_key, '[]'::jsonb);
-      select exists (
-        select 1
-        from jsonb_array_elements(v_slots) slot
-        where (v_local_now::time >= (slot ->> 'open')::time)
-          and (v_local_now::time < (slot ->> 'close')::time)
-      ) into v_is_open;
+      v_is_open := public.is_within_business_slots(v_slots, v_local_now::time);
       if not v_is_open then
         raise exception 'store_closed' using errcode = 'P0002';
       end if;
