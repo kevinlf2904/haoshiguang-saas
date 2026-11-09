@@ -22,6 +22,13 @@ type CheckoutBody = {
 const json = (message: string, status: number) =>
   NextResponse.json({ error: message }, { status });
 
+async function keyedHash(value: string, secret: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(signature), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export async function POST(request: NextRequest) {
   let body: CheckoutBody;
   try {
@@ -71,8 +78,6 @@ export async function POST(request: NextRequest) {
   const vercelForwardedFor = request.headers.get("x-vercel-forwarded-for")?.split(",").at(-1)?.trim() || "";
   const clientIp = vercelForwardedFor || forwardedFor;
   if (!clientIp || clientIp.length > 128) return json("無法確認連線來源，請稍後再試。", 400);
-  const ipHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(clientIp))
-    .then(buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 32));
 
   const requestFingerprint = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({
     storeSlug: body.storeSlug,
@@ -90,6 +95,12 @@ export async function POST(request: NextRequest) {
     return json("訂單服務尚未設定，請稍後再試。", 503);
   }
 
+  const normalizedPhone = body.customerPhone.replace(/\D/g, "");
+  const [ipHash, phoneHash] = await Promise.all([
+    keyedHash(`ip:${clientIp}`, serviceRoleKey),
+    keyedHash(`phone:${normalizedPhone}`, serviceRoleKey),
+  ]);
+
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -103,6 +114,7 @@ export async function POST(request: NextRequest) {
     p_items: items,
     p_idempotency_key: idempotencyKey,
     p_client_ip_hash: ipHash,
+    p_phone_hash: phoneHash,
     p_request_hash: requestFingerprint,
   });
 
