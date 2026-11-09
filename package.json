@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
     "test:db": "bash scripts/test-db.sh",
     "test:url": "node --test scripts/tests/*.test.mjs"
   },
@@ -24,6 +25,14 @@
     "@types/react-dom": "^19.0.4",
     "eslint": "^9.22.0",
     "eslint-config-next": "^15.2.4",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "@playwright/test": "^1.56.1"
+  },
+  "overrides": {
+    "postcss": "^8.5.23",
+    "minimatch": "^11.0.1",
+    "@eslint/eslintrc": {
+      "minimatch": "3.1.5"
+    }
   }
 }
