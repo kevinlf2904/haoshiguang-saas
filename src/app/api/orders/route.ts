@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    if (error.message.includes("store_unavailable")) return json("這間店目前暫停接單。", 404);
+    if (error.message.includes("store_unavailable")) return json("找不到這間店或店家目前未營業。", 404);\n    if (error.message.includes("store_closed")) return json("店家目前未營業或暫停接單，請於營業時間再試。", 409);
     if (error.message.includes("item_unavailable_or_invalid")) return json("部分餐點已停售或資料有變動，請重新整理菜單。", 409);
     if (error.code === "22023") return json("訂單資料不完整或格式有誤，請重新確認。", 400);
     return json("訂單暫時無法建立，請稍後再試。", 500);
