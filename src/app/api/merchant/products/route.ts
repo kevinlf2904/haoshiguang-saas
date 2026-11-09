@@ -38,7 +38,7 @@ function validUuid(value: unknown): value is string {
 
 export async function GET(request: NextRequest) {
   const { supabase, userId, response } = await getContext();
-  if (response || !supabase || !userId) return response;
+  if (response || !supabase || !userId) return response ?? fail("請先登入店家管理帳號。", 401);
 
   const { data: memberships, error: membershipError } = await supabase
     .from("memberships")
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const { supabase, userId, response } = await getContext();
-  if (response || !supabase || !userId) return response;
+  if (response || !supabase || !userId) return response ?? fail("請先登入店家管理帳號。", 401);
 
   let body: CatalogBody;
   try { body = await request.json() as CatalogBody; }
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   const { supabase, userId, response } = await getContext();
-  if (response || !supabase || !userId) return response;
+  if (response || !supabase || !userId) return response ?? fail("請先登入店家管理帳號。", 401);
 
   let body: CatalogBody;
   try { body = await request.json() as CatalogBody; }
