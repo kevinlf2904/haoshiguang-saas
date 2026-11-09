@@ -146,3 +146,47 @@ $$;
 
 revoke all on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb) from public;
 grant execute on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb) to anon, authenticated;
+
+create or replace function public.is_valid_weekly_hours(p_hours jsonb)
+returns boolean
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  v_day text;
+  v_slots jsonb;
+  v_slot jsonb;
+  v_open text;
+  v_close text;
+  v_previous_close text;
+begin
+  if jsonb_typeof(p_hours) <> 'object' then return false; end if;
+  for v_day, v_slots in select key, value from jsonb_each(p_hours) loop
+    if v_day not in ('mon','tue','wed','thu','fri','sat','sun')
+       or jsonb_typeof(v_slots) <> 'array'
+       or jsonb_array_length(v_slots) > 2 then return false; end if;
+    v_previous_close := null;
+    for v_slot in select value from jsonb_array_elements(v_slots) loop
+      if jsonb_typeof(v_slot) <> 'object' then return false; end if;
+      v_open := v_slot ->> 'open';
+      v_close := v_slot ->> 'close';
+      if v_open is null or v_close is null
+         or v_open !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+         or v_close !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+         or v_open >= v_close
+         or (v_previous_close is not null and v_open < v_previous_close) then
+        return false;
+      end if;
+      v_previous_close := v_close;
+    end loop;
+  end loop;
+  return true;
+exception when others then
+  return false;
+end;
+$$;
+
+alter table public.store_settings
+  add constraint store_settings_weekly_hours_valid check (public.is_valid_weekly_hours(weekly_hours)),
+  add constraint store_settings_closed_dates_limit check (cardinality(closed_dates) <= 90);
