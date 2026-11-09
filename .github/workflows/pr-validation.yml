@@ -3,8 +3,6 @@ name: PR validation
 on:
   pull_request:
     branches: [main, feat/pilot-foundation-hardening, feat/customer-ordering-storefront]
-  push:
-    branches: [feat/pilot-foundation-hardening, feat/customer-ordering-storefront, feat/secure-order-checkout]
 
 permissions:
   contents: read
@@ -33,16 +31,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      # Generate or refresh the lockfile on the runner so npm ci is exercised consistently.
-      - name: Generate npm lockfile
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Export generated lockfile for pinning
-        uses: actions/upload-artifact@v4
-        with:
-          name: generated-package-lock
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 1
       - name: Install dependencies
         run: npm ci
       - name: Typecheck
