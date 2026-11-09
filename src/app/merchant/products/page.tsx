@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -123,8 +124,8 @@ export default function MerchantProductsPage() {
 
   return <main className="merchant-products-shell">
     <header className="merchant-products-header">
-      <a href="/" className="merchant-products-brand">好食光 <span>店家管理</span></a>
-      <div><a href="/merchant/orders">訂單管理</a><a href="/merchant/settings">營業設定</a><button onClick={signOut}>登出</button></div>
+      <Link href="/" className="merchant-products-brand">好食光 <span>店家管理</span></Link>
+      <div><Link href="/merchant/orders">訂單管理</Link><Link href="/merchant/settings">營業設定</Link><button onClick={signOut}>登出</button></div>
     </header>
     <section className="merchant-products-intro">
       <div><span className="merchant-products-kicker">MENU MANAGEMENT</span><h1>商品管理</h1><p>管理店內分類、商品價格與販售狀態。</p></div>
