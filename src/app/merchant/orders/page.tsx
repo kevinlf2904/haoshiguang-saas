@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -84,7 +85,7 @@ export default function MerchantOrdersPage() {
 
   return <main className="merchant-orders-shell">
     <header className="merchant-orders-header">
-      <a href="/" className="merchant-orders-brand">好食光 <span>店家管理</span></a>
+      <Link href="/" className="merchant-orders-brand">好食光 <span>店家管理</span></Link>
       <div><button className="refresh-button" onClick={() => void loadOrders()}>重新整理</button><button className="signout-button" onClick={signOut}>登出</button></div>
     </header>
     <section className="merchant-orders-intro">
