@@ -74,6 +74,16 @@ export async function POST(request: NextRequest) {
   const ipHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(clientIp))
     .then(buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 32));
 
+  const requestFingerprint = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({
+    storeSlug: body.storeSlug,
+    customerName: body.customerName.trim(),
+    customerPhone: body.customerPhone.replace(/\D/g, ""),
+    fulfillment: body.fulfillment,
+    tableLabel: body.fulfillment === "dine_in" ? body.tableLabel?.trim() || "" : "",
+    note: body.note?.trim() || "",
+    items,
+  }))).then(buffer => Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, "0")).join(""));
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceRoleKey) {
@@ -93,6 +103,7 @@ export async function POST(request: NextRequest) {
     p_items: items,
     p_idempotency_key: idempotencyKey,
     p_client_ip_hash: ipHash,
+    p_request_hash: requestFingerprint,
   });
 
   if (error) {
@@ -102,6 +113,7 @@ export async function POST(request: NextRequest) {
     if (error.message.includes("order_rate_limited")) return json("送單次數過於頻繁，請 10 分鐘後再試。", 429);
     if (error.message.includes("order_ip_rate_limited")) return json("目前連線送單過於頻繁，請 10 分鐘後再試。", 429);
     if (error.message.includes("order_total_exceeds_limit")) return json("訂單金額超過系統允許上限，請聯絡店家。", 400);
+    if (error.message.includes("idempotency_key_payload_mismatch")) return json("這筆送單識別碼已用於不同訂單內容，請重新整理購物車後再送出。", 409);
     if (error.code === "22023") return json("訂單資料不完整或格式有誤，請重新確認。", 400);
     return json("訂單暫時無法建立，請稍後再試。", 500);
   }
