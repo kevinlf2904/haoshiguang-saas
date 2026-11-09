@@ -57,13 +57,13 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
     .update({ price: originalSoupPrice + 1 }).eq("id", soupProduct!.id);
   expect(priceUpdateError).toBeNull();
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.locator(".cart-line-main span")).toHaveText(`NT${originalSoupPrice + 1} / 份`);
-  await expect(page.locator(".cart-total strong")).toHaveText(`NT${originalSoupPrice + 1}`);
+  await expect(page.locator(".cart-line-main span")).toHaveText(`NT$${originalSoupPrice + 1} / 份`);
+  await expect(page.locator(".cart-total strong")).toHaveText(`NT$${originalSoupPrice + 1}`);
   const { error: priceRestoreError } = await admin.from("products")
     .update({ price: originalSoupPrice }).eq("id", soupProduct!.id);
   expect(priceRestoreError).toBeNull();
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.locator(".cart-total strong")).toHaveText(`NT${originalSoupPrice}`);
+  await expect(page.locator(".cart-total strong")).toHaveText(`NT$${originalSoupPrice}`);
 
   // The later order-creation assertion uses the canonical pilot price after restoration.
 
