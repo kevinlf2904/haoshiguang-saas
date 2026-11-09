@@ -43,6 +43,8 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Validate local database URL guard
+        run: npm run test:url
       - name: Build
         run: npm run build
       - name: PostgreSQL migration and seed tests
