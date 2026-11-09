@@ -70,6 +70,7 @@ create or replace function public.create_public_order(
   p_items jsonb,
   p_idempotency_key uuid,
   p_client_ip_hash text,
+  p_phone_hash text,
   p_request_hash text
 )
 returns jsonb
@@ -123,7 +124,8 @@ begin
   end if;
 
   if p_idempotency_key is null or p_client_ip_hash is null
-     or p_client_ip_hash !~ '^[a-f0-9]{32}$'
+     or p_client_ip_hash !~ '^[a-f0-9]{64}$'
+     or p_phone_hash is null or p_phone_hash !~ '^[a-f0-9]{64}$'
      or p_request_hash is null or length(p_request_hash) <> 64
      or p_request_hash !~ '^[a-f0-9]+$' then
     raise exception 'invalid_checkout_context' using errcode = '22023';
@@ -212,7 +214,7 @@ begin
 
   -- Serialize attempts for this store + normalized phone, then allow at most
   -- five successful checkouts in a rolling ten-minute window.
-  v_phone_hash := md5(v_phone);
+  v_phone_hash := p_phone_hash;
   perform pg_advisory_xact_lock(hashtextextended(v_tenant_id::text || ':' || v_phone_hash, 0));
   if (select count(*) from public.public_order_rate_limits r
       where r.tenant_id = v_tenant_id and r.phone_hash = v_phone_hash
@@ -246,5 +248,5 @@ $$;
 
 revoke all on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb) from public, anon, authenticated;
 drop function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb);
-revoke all on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text) from public, anon, authenticated;
-grant execute on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text) to service_role;
+revoke all on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text,text) from public, anon, authenticated;
+grant execute on function public.create_public_order(text,text,text,public.fulfillment_type,text,text,jsonb,uuid,text,text,text) to service_role;
