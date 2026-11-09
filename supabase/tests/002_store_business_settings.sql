@@ -73,7 +73,18 @@ reset role;
 -- Owner can update its own tenant settings.
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
-do $$
+do $
+declare own_orders integer; foreign_orders integer; own_items integer; foreign_items integer;
+begin
+  select count(*) into own_orders from public.orders where customer_name='店家 A 顧客';
+  select count(*) into foreign_orders from public.orders where customer_name='店家 B 顧客';
+  select count(*) into own_items from public.order_items oi join public.orders o on o.id=oi.order_id where o.customer_name='店家 A 顧客';
+  select count(*) into foreign_items from public.order_items oi join public.orders o on o.id=oi.order_id where o.customer_name='店家 B 顧客';
+  if own_orders <> 1 or foreign_orders <> 0 or own_items <> 1 or foreign_items <> 0 then
+    raise exception 'tenant A must read only its own orders and order items';
+  end if;
+end $;
+do $
 declare affected integer;
 begin
   update public.store_settings set prep_time_minutes=25
