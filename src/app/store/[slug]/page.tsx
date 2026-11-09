@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import menuData from "../../../../data/laozhang-menu.json";
 import "./storefront.css";
 
 type MenuItem = (typeof menuData.menu)[number];
-type CartLine = { key: string; item: MenuItem; quantity: number };
+type CartLine = { key: string; item: MenuItem; quantity: number };\ntype StoreStatus = { acceptingOrders: boolean; prepTimeMinutes: number } | null;
 
 const money = (value: number) => new Intl.NumberFormat("zh-TW", {
   style: "currency", currency: "TWD", maximumFractionDigits: 0,
@@ -25,7 +25,7 @@ export default function StorefrontPage() {
   const [showCart, setShowCart] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
-  const [confirmedOrder, setConfirmedOrder] = useState<{ order_number: number; total: number } | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<{ order_number: number; total: number } | null>(null);\n  const [storeStatus, setStoreStatus] = useState<StoreStatus>(null);\n\n  useEffect(() => {\n    let active = true;\n    fetch("/api/merchant/business-hours?slug=" + encodeURIComponent(params.slug), { cache: "no-store" })\n      .then(response => response.ok ? response.json() : null)\n      .then(result => { if (active && result) setStoreStatus({ acceptingOrders: Boolean(result.acceptingOrders), prepTimeMinutes: Number(result.prepTimeMinutes) || 20 }); })\n      .catch(() => { if (active) setStoreStatus(null); });\n    return () => { active = false; };\n  }, [params.slug]);
 
   const visibleItems = menuData.menu.filter((item) => item.category === activeCategory);
   const count = cart.reduce((sum, line) => sum + line.quantity, 0);
@@ -47,7 +47,7 @@ export default function StorefrontPage() {
 
   async function submitOrder() {
     setCheckoutError("");
-    if (cart.length === 0) return setCheckoutError("請先選擇餐點。");
+    if (storeStatus && !storeStatus.acceptingOrders) return setCheckoutError("店家目前未營業或暫停接單，暫時無法送出訂單。");\n    if (cart.length === 0) return setCheckoutError("請先選擇餐點。");
     if (!customerName.trim() || !customerPhone.trim()) return setCheckoutError("請填寫稱呼及聯絡電話。");
     if (fulfillment === "dine_in" && !tableLabel.trim()) return setCheckoutError("內用請填寫桌號。");
     setSubmitting(true);
@@ -101,7 +101,7 @@ export default function StorefrontPage() {
           <span className="eyebrow">LOCAL FAVORITE · SINYI DISTRICT</span>
           <h1>{menuData.tenant.name}</h1>
           <p>一碗熱騰騰的好味道，今天也替你好好準備。</p>
-          <div className="store-meta">
+          {storeStatus && <p className="store-operating-status">{storeStatus.acceptingOrders ? "● 目前可接單" : "● 目前暫停接單"} · 預計備餐 {storeStatus.prepTimeMinutes} 分鐘</p>}\n          <div className="store-meta">
             <span>⌖ {menuData.tenant.address}</span>
             <a href={`tel:${menuData.tenant.phone}`}>☎ {menuData.tenant.phone}</a>
           </div>
@@ -173,7 +173,7 @@ export default function StorefrontPage() {
           {confirmedOrder ? (
             <div className="checkout-result" role="status"><strong>訂單已建立</strong><b>訂單編號 #{confirmedOrder.order_number}</b><span>應付金額 {money(confirmedOrder.total)}</span><small>請向店家確認接單狀態；目前僅支援現場付款。</small><button onClick={() => setConfirmedOrder(null)}>繼續點餐</button></div>
           ) : (
-            <><button className="checkout-button" onClick={submitOrder} disabled={submitting || cart.length === 0}>{submitting ? "正在送出…" : "送出訂單"} <span>→</span></button>
+            <><button className="checkout-button" onClick={submitOrder} disabled={submitting || cart.length === 0 || Boolean(storeStatus && !storeStatus.acceptingOrders)}>{submitting ? "正在送出…" : storeStatus && !storeStatus.acceptingOrders ? "目前暫停接單" : "送出訂單"} <span>→</span></button>
             {checkoutError && <p className="checkout-error" role="alert">{checkoutError}</p>}
             <p className="checkout-hint">送出後會建立待確認訂單；目前僅支援現場付款，尚未串接線上金流。</p></>
           )}
