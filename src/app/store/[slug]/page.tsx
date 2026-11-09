@@ -1,0 +1,147 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import menuData from "../../../../data/laozhang-menu.json";
+import "./storefront.css";
+
+type MenuItem = (typeof menuData.menu)[number];
+type CartLine = { key: string; item: MenuItem; quantity: number };
+
+const money = (value: number) => new Intl.NumberFormat("zh-TW", {
+  style: "currency", currency: "TWD", maximumFractionDigits: 0,
+}).format(value);
+
+export default function StorefrontPage() {
+  const params = useParams<{ slug: string }>();
+  const categories = [...new Set(menuData.menu.map((item) => item.category))];
+  const [activeCategory, setActiveCategory] = useState(categories[0]);
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [fulfillment, setFulfillment] = useState<"takeaway" | "dine_in">("takeaway");
+  const [tableLabel, setTableLabel] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [note, setNote] = useState("");
+  const [showCart, setShowCart] = useState(false);
+
+  const visibleItems = menuData.menu.filter((item) => item.category === activeCategory);
+  const count = cart.reduce((sum, line) => sum + line.quantity, 0);
+  const subtotal = useMemo(
+    () => cart.reduce((sum, line) => sum + line.item.price * line.quantity, 0),
+    [cart],
+  );
+
+  function add(item: MenuItem) {
+    const key = item.name;
+    setCart((current) => {
+      const found = current.find((line) => line.key === key);
+      if (found) return current.map((line) =>
+        line.key === key ? { ...line, quantity: line.quantity + 1 } : line,
+      );
+      return [...current, { key, item, quantity: 1 }];
+    });
+  }
+
+  function changeQuantity(key: string, delta: number) {
+    setCart((current) => current
+      .map((line) => line.key === key ? { ...line, quantity: line.quantity + delta } : line)
+      .filter((line) => line.quantity > 0));
+  }
+
+  if (params.slug !== menuData.tenant.slug) {
+    return <main className="order-shell"><section className="store-option-note"><strong>找不到這間店</strong><span>請確認店家網址是否正確。</span></section></main>;
+  }
+
+  return (
+    <main className="order-shell">
+      <header className="store-header">
+        <Link className="store-brand" href="/">好食光</Link>
+        <span className="store-header-note">線上點餐 · PICK UP SOMETHING GOOD</span>
+        <button className="cart-mobile" onClick={() => setShowCart(!showCart)} aria-label="開啟購物車">
+          購物車 <b>{count}</b>
+        </button>
+      </header>
+
+      <section className="store-hero">
+        <div className="store-hero-copy">
+          <span className="eyebrow">LOCAL FAVORITE · SINYI DISTRICT</span>
+          <h1>{menuData.tenant.name}</h1>
+          <p>一碗熱騰騰的好味道，今天也替你好好準備。</p>
+          <div className="store-meta">
+            <span>⌖ {menuData.tenant.address}</span>
+            <a href={`tel:${menuData.tenant.phone}`}>☎ {menuData.tenant.phone}</a>
+          </div>
+        </div>
+        <div className="hero-stamp"><span>好食光</span><b>GOOD<br/>FOOD<br/>GOOD DAY</b></div>
+      </section>
+
+      <div className="store-layout">
+        <section className="menu-section">
+          <div className="section-heading">
+            <div><span className="eyebrow">OUR MENU</span><h2>今天想吃點什麼？</h2></div>
+            <span className="menu-count">{menuData.menu.length} 道好味道</span>
+          </div>
+          <nav className="category-tabs" aria-label="菜單分類">
+            {categories.map((category) => (
+              <button key={category} className={activeCategory === category ? "active" : ""}
+                onClick={() => setActiveCategory(category)}>{category}</button>
+            ))}
+          </nav>
+          <div className="menu-grid">
+            {visibleItems.map((item) => (
+              <article className="menu-card" key={item.name}>
+                <div className="dish-art" aria-hidden="true"><span>{item.category === "小菜" ? "🥢" : item.category === "飯類" ? "🍚" : "🍜"}</span></div>
+                <div className="dish-info">
+                  <div className="dish-title-row"><h3>{item.name}</h3><strong>{money(item.price)}</strong></div>
+                  {item.description ? <p>{item.description}</p> : <p className="dish-subtle">店家每日新鮮製作</p>}
+                  <button className="add-button" onClick={() => add(item)} aria-label={`加入${item.name}`}>＋ 加入</button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="store-option-note">
+            <strong>加購選項</strong>
+            <span>加麵 + NT$20</span><span>升級燒肉飯 + NT$30</span>
+            <small>加購選項的適用商品與客製化規則，待店家後台設定完成後開放選取。</small>
+          </div>
+        </section>
+
+        <aside className={`cart-panel ${showCart ? "cart-open" : ""}`}>
+          <div className="cart-heading"><div><span className="eyebrow">YOUR ORDER</span><h2>訂單明細</h2></div><span className="cart-count">{count} 件</span></div>
+          {cart.length === 0 ? (
+            <div className="empty-cart"><span>🥣</span><strong>購物車還是空的</strong><p>選幾道喜歡的餐點，開始今天的美味。</p></div>
+          ) : (
+            <div className="cart-lines">
+              {cart.map((line) => (
+                <div className="cart-line" key={line.key}>
+                  <div className="cart-line-main"><strong>{line.item.name}</strong><span>{money(line.item.price)} / 份</span></div>
+                  <div className="quantity-control">
+                    <button onClick={() => changeQuantity(line.key, -1)} aria-label={`減少${line.item.name}`}>−</button>
+                    <b>{line.quantity}</b>
+                    <button onClick={() => changeQuantity(line.key, 1)} aria-label={`增加${line.item.name}`}>＋</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="cart-form">
+            <label className="field-label">取餐方式</label>
+            <div className="fulfillment-switch">
+              <button className={fulfillment === "takeaway" ? "selected" : ""} onClick={() => setFulfillment("takeaway")}>外帶</button>
+              <button className={fulfillment === "dine_in" ? "selected" : ""} onClick={() => setFulfillment("dine_in")}>內用</button>
+            </div>
+            {fulfillment === "dine_in" && <label className="field-label">桌號<input value={tableLabel} onChange={(event) => setTableLabel(event.target.value)} placeholder="請輸入桌號"/></label>}
+            <label className="field-label">稱呼<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="怎麼稱呼您？"/></label>
+            <label className="field-label">聯絡電話<input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} inputMode="tel" placeholder="方便店家聯絡"/></label>
+            <label className="field-label">備註（選填）<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="例如：不要香菜、餐具不用..." rows={2}/></label>
+          </div>
+          <div className="cart-total"><span>商品小計</span><strong>{money(subtotal)}</strong></div>
+          <button className="checkout-button" disabled>線上送出訂單 <span>→</span></button>
+          <p className="checkout-hint">目前為點餐介面開發版，雲端訂單 API 尚未啟用，暫不會送出或收取款項。</p>
+        </aside>
+      </div>
+      <footer className="store-footer"><strong>好食光</strong><span>讓每一餐，都剛剛好。</span><small>此為試點建置頁面，尚未開放正式接單。</small></footer>
+    </main>
+  );
+}
