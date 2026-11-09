@@ -25,6 +25,16 @@ insert into public.store_settings(tenant_id)
 select id from public.tenants
 on conflict (tenant_id) do nothing;
 
+-- Tenant B catalog fixtures are used to verify that tenant A cannot mutate them.
+insert into public.categories(tenant_id,name)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','B 專屬分類')
+on conflict (tenant_id,name) do nothing;
+insert into public.products(tenant_id,category_id,name,price)
+select c.tenant_id,c.id,'B 專屬商品',99
+from public.categories c
+where c.tenant_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' and c.name='B 專屬分類'
+on conflict (tenant_id,category_id,name) do nothing;
+
 -- Orders and customer details are private to each tenant.
 insert into public.orders(tenant_id,customer_name,customer_phone,fulfillment,subtotal,total)
 values
