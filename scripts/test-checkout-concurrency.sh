@@ -95,4 +95,37 @@ NODE
 # Restore the catalog fixture so repeated CI runs begin from the seed price.
 psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 -c "update public.products set price=$old_price where tenant_id=(select id from public.tenants where slug='laozhang') and name='白飯' and category_id=(select id from public.categories where tenant_id=(select id from public.tenants where slug='laozhang') and name='飯類')"
 
-echo "PASS: concurrent idempotency and catalog-price locking tests completed."
+echo "Testing store pause racing with checkout..."
+(
+  psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 >"$tmp/store-a.out" <<SQL
+begin;
+update public.store_settings set is_accepting_orders=false
+where tenant_id=(select id from public.tenants where slug='laozhang');
+\\! touch "$tmp/store-ready"
+select pg_sleep(2);
+commit;
+SQL
+) &
+store_pid=$!
+wait_for_file "$tmp/store-ready"
+if psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 >"$tmp/store-b.out" 2>"$tmp/store-b.err" <<'SQL'
+select public.create_public_order(
+  'laozhang','營業狀態競態測試','09122223335','takeaway',null,'',
+  '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
+  '99999999-9999-4999-8999-999999999999'::uuid, repeat('1',64), repeat('2',64), repeat('3',64)
+);
+SQL
+then
+  echo "Checkout unexpectedly succeeded while the store was being paused" >&2
+  wait "$store_pid" || true
+  exit 1
+fi
+wait "$store_pid"
+grep -q "store_unavailable" "$tmp/store-b.err" || {
+  echo "Checkout did not reject using the committed paused-store state" >&2
+  cat "$tmp/store-b.err" >&2
+  exit 1
+}
+psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 -c "update public.store_settings set is_accepting_orders=true where tenant_id=(select id from public.tenants where slug='laozhang')"
+
+echo "PASS: concurrent idempotency, catalog-price, and store-pause locking tests completed."
