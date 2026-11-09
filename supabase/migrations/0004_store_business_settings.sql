@@ -96,10 +96,9 @@ begin
       raise exception 'store_closed' using errcode = 'P0002';
     end if;
     if v_settings.weekly_hours <> '{}'::jsonb then
-      v_day_key := lower(to_char(v_local_now, 'Dy'));
-      v_day_key := case v_day_key
-        when 'mon' then 'mon' when 'tue' then 'tue' when 'wed' then 'wed'
-        when 'thu' then 'thu' when 'fri' then 'fri' when 'sat' then 'sat'
+      v_day_key := case extract(isodow from v_local_now)::integer
+        when 1 then 'mon' when 2 then 'tue' when 3 then 'wed'
+        when 4 then 'thu' when 5 then 'fri' when 6 then 'sat'
         else 'sun' end;
       v_slots := coalesce(v_settings.weekly_hours -> v_day_key, '[]'::jsonb);
       select exists (
