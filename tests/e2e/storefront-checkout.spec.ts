@@ -83,7 +83,7 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
     fulfillment: "takeaway", tableLabel: "", note: "",
     items: [{ name: "海鮮湯麵", category: "湯麵類", quantity: 1 }],
   };
-  const pausedResponse = await request.post("/api/orders", { data: checkoutBody });
+  const pausedResponse = await request.post("/api/orders", { data: checkoutBody, headers: { "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1" } });
   expect(pausedResponse.status()).toBe(404);
   expect((await pausedResponse.json()).error).toContain("暫停接單");
 
@@ -98,7 +98,7 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
 
   await page.goto("/store/laozhang");
   await expect(page.getByText("目前暫停線上接單")).toBeVisible();
-  const holidayResponse = await request.post("/api/orders", { data: checkoutBody });
+  const holidayResponse = await request.post("/api/orders", { data: checkoutBody, headers: { "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2" } });
   expect(holidayResponse.status()).toBe(409);
   expect((await holidayResponse.json()).error).toContain("公休日");
 
