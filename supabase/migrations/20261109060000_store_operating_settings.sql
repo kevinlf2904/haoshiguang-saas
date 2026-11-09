@@ -48,7 +48,7 @@ begin
     v_schedule := coalesce(v_tenant.weekly_hours -> v_day, '[]'::jsonb);
   end if;
 
-  for v_interval in select value from jsonb_array_elements(v_schedule)
+  if jsonb_typeof(v_schedule) <> 'array' then return false; end if;\n\n  for v_interval in select value from jsonb_array_elements(v_schedule)
   loop
     begin
       v_open := (v_interval ->> 'open')::time;
