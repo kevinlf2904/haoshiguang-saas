@@ -31,6 +31,25 @@ insert into public.store_settings (tenant_id)
 select id from public.tenants
 on conflict (tenant_id) do nothing;
 
+create or replace function public.create_default_store_settings()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  insert into public.store_settings (tenant_id)
+  values (new.id)
+  on conflict (tenant_id) do nothing;
+  return new;
+end;
+$;
+
+revoke all on function public.create_default_store_settings() from public, anon, authenticated;
+create trigger tenants_create_store_settings
+after insert on public.tenants
+for each row execute function public.create_default_store_settings();
+
 create or replace function public.is_within_business_slots(p_slots jsonb, p_local_time time)
 returns boolean
 language plpgsql
