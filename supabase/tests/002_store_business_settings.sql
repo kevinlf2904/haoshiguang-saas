@@ -159,7 +159,7 @@ begin
 end $$;
 
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',false);
-do $
+do $staff$
 declare affected integer;
 begin
   update public.store_settings set prep_time_minutes=45
@@ -174,7 +174,7 @@ begin
   where tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and name='A 專屬商品';
   get diagnostics affected = row_count;
   if affected <> 0 then raise exception 'staff must not update own tenant products'; end if;
-end $;
+end $staff$;
 reset role;
 
 -- INSERT is limited to owner/manager membership; staff and another tenant's owner are denied.
