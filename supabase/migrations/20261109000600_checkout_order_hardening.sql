@@ -37,7 +37,7 @@ for each row execute function public.enforce_order_status_transition();
 
 -- Revoke direct status writes from anon and authenticated clients. Merchant API
 -- updates remain governed by the existing tenant-membership RLS policy.
-revoke update(status) on public.orders from authenticated, anon;
+-- The existing authenticated UPDATE grant remains; the trigger is the database-enforced guard.
 
 create or replace function public.create_public_order(
   p_tenant_slug text,
@@ -128,7 +128,7 @@ begin
 
   -- Serialize attempts for this store + normalized phone, then allow at most
   -- five successful checkouts in a rolling ten-minute window.
-  v_phone_hash := encode(extensions.digest(v_phone, 'sha256'), 'hex');
+  v_phone_hash := md5(v_phone);
   perform pg_advisory_xact_lock(hashtextextended(v_tenant_id::text || ':' || v_phone_hash, 0));
   if (select count(*) from public.public_order_rate_limits r
       where r.tenant_id = v_tenant_id and r.phone_hash = v_phone_hash
