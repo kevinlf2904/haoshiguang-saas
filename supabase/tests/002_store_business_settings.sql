@@ -14,6 +14,20 @@ insert into public.tenants(id,name,slug) values
  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','測試店 B','test-store-b')
 on conflict (id) do nothing;
 
+do $block$
+declare settings_count integer;
+begin
+  select count(*) into settings_count
+  from public.store_settings
+  where tenant_id in (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  );
+  if settings_count <> 2 then
+    raise exception 'every newly created tenant must receive default store settings';
+  end if;
+end $block$;
+
 insert into public.memberships(tenant_id,user_id,role) values
  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','10000000-0000-4000-8000-000000000001','owner'),
  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','10000000-0000-4000-8000-000000000002','manager'),
