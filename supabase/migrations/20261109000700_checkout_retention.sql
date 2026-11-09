@@ -65,8 +65,8 @@ comment on function public.cleanup_public_order_retention(uuid) is
   'Deletes up to 500 stale rows per table for one tenant. Rate-limit retention: 24h; idempotency replay retention: 7 days. Invoked transactionally by create_public_order; service_role may also invoke it for maintenance.';
 
 -- Run cleanup after a new idempotency ledger row is inserted.
--- The trigger executes in the same transaction as checkout, so a cleanup failure
--- rolls back the order rather than silently skipping retention maintenance.
+-- The trigger executes in the checkout transaction but isolates cleanup errors,
+-- so maintenance failures never block an otherwise valid order.
 create or replace function public.trigger_checkout_retention_cleanup()
 returns trigger
 language plpgsql
@@ -75,6 +75,11 @@ set search_path = ''
 as $$
 begin
   perform public.cleanup_public_order_retention(new.tenant_id);
+  return new;
+exception when others then
+  -- Retention is best-effort: maintenance must never turn a valid checkout into
+  -- a failed order. The transaction rolls back only the cleanup sub-block.
+  raise warning 'checkout_retention_cleanup_failed for tenant %: %', new.tenant_id, sqlerrm;
   return new;
 end;
 $$;
