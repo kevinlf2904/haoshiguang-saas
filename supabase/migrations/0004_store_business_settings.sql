@@ -36,7 +36,7 @@ returns boolean
 language plpgsql
 immutable
 set search_path = ''
-as $
+as $$
 begin
   if jsonb_typeof(p_slots) <> 'array' then return false; end if;
   return exists (
@@ -48,7 +48,7 @@ begin
 exception when others then
   return false;
 end;
-$;
+$$;
 
 create or replace function public.create_public_order(
   p_tenant_slug text,
