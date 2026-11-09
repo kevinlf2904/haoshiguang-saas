@@ -129,8 +129,12 @@ begin
     (v_tenant, repeat('3',64), now() - interval '25 hours'),
     (v_tenant, repeat('4',64), now() - interval '5 minutes');
   insert into public.public_order_idempotency(tenant_id, idempotency_key, request_hash, order_id, created_at) values
-    (v_tenant, '77777777-7777-4777-8777-777777777771', repeat('7',64), v_order, now() - interval '8 days'),
-    (v_tenant, '77777777-7777-4777-8777-777777777772', repeat('7',64), v_order, now() - interval '1 day');
+    (v_tenant, '77777777-7777-4777-8777-777777777771', repeat('7',64), v_order, now()),
+    (v_tenant, '77777777-7777-4777-8777-777777777772', repeat('7',64), v_order, now());
+  update public.public_order_idempotency
+  set created_at = now() - interval '8 days'
+  where tenant_id = v_tenant
+    and idempotency_key = '77777777-7777-4777-8777-777777777771';
 
   perform public.cleanup_public_order_retention(v_tenant);
 
