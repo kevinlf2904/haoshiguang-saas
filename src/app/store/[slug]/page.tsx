@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import menuData from "../../../../data/laozhang-menu.json";
@@ -89,7 +90,7 @@ export default function StorefrontPage() {
   return (
     <main className="order-shell">
       <header className="store-header">
-        <a className="store-brand" href="/">好食光</a>
+        <Link className="store-brand" href="/">好食光</Link>
         <span className="store-header-note">線上點餐 · PICK UP SOMETHING GOOD</span>
         <button className="cart-mobile" onClick={() => setShowCart(!showCart)} aria-label="開啟購物車">
           購物車 <b>{count}</b>
