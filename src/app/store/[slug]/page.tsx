@@ -47,21 +47,60 @@ export default function StorefrontPage() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/store-settings?slug=" + encodeURIComponent(params.slug), { cache: "no-store" })
-      .then(async response => {
+    let hasLoaded = false;
+
+    const refreshStorefront = async () => {
+      try {
+        const response = await fetch("/api/store-settings?slug=" + encodeURIComponent(params.slug), { cache: "no-store" });
         const result = await response.json() as { tenant?: StoreTenant; settings?: StoreSettings; categories?: StoreCategory[]; products?: MenuItem[] };
         if (!response.ok || !result.settings || !result.tenant) throw new Error("storefront_unavailable");
+        if (!active) return;
+
+        const nextCategories = result.categories || [];
+        const nextProducts = result.products || [];
+        setTenant(result.tenant);
+        setStoreSettings(result.settings);
+        setCategories(nextCategories);
+        setMenuItems(nextProducts);
+        setActiveCategory(current => nextCategories.some(category => category.id === current)
+          ? current
+          : nextCategories[0]?.id || "");
+        setCart(current => {
+          const refreshed = current.flatMap(line => {
+            const item = nextProducts.find(product => product.id === line.item.id);
+            return item ? [{ ...line, item }] : [];
+          });
+          if (refreshed.length !== current.length) {
+            setCheckoutError("菜單已更新，部分停售或下架餐點已從購物車移除，請確認訂單內容。");
+          }
+          return refreshed;
+        });
+        setSettingsError(false);
+      } catch {
+        // Preserve the last known good menu during transient refresh failures.
+        if (active && !hasLoaded) setSettingsError(true);
+      } finally {
         if (active) {
-          setTenant(result.tenant);
-          setStoreSettings(result.settings);
-          setCategories(result.categories || []);
-          setMenuItems(result.products || []);
-          setActiveCategory(result.categories?.[0]?.id || "");
+          hasLoaded = true;
+          setSettingsLoading(false);
         }
-      })
-      .catch(() => { if (active) setSettingsError(true); })
-      .finally(() => { if (active) setSettingsLoading(false); });
-    return () => { active = false; };
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshStorefront();
+    };
+
+    void refreshStorefront();
+    const interval = window.setInterval(refreshStorefront, 30_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [params.slug]);
 
   const isOpenNow = useMemo(() => {
