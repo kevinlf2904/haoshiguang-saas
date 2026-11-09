@@ -6,6 +6,8 @@ declare
   v_order uuid;
   v_count integer;
   v_rejected boolean := false;
+  v_first jsonb;
+  v_second jsonb;
   i integer;
 begin
   select id into v_tenant from public.tenants where slug = 'laozhang';
@@ -45,6 +47,21 @@ begin
     v_rejected := true;
   end;
   if not v_rejected then raise exception 'rate_limit_was_not_enforced'; end if;
+
+  -- Reusing one idempotency key returns the same order instead of inserting twice.
+  v_first := public.create_public_order(
+    'laozhang', '冪等測試', '0911111111', 'takeaway', null, '',
+    '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
+    '11111111-1111-4111-8111-111111111111'::uuid, repeat('a',32)
+  );
+  v_second := public.create_public_order(
+    'laozhang', '冪等測試', '0911111111', 'takeaway', null, '',
+    '[{"product_name":"白飯","category_name":"飯類","quantity":1}]'::jsonb,
+    '11111111-1111-4111-8111-111111111111'::uuid, repeat('a',32)
+  );
+  if v_first ->> 'id' <> v_second ->> 'id' then
+    raise exception 'idempotency_did_not_return_original_order';
+  end if;
 end;
 $$;
 
