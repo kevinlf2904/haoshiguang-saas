@@ -118,7 +118,7 @@ begin
 end $$;
 
 -- DELETE is intentionally unavailable to staff and owners, including cross-tenant targets.
-do $
+do $$
 begin
   if has_table_privilege(current_user, 'public.store_settings', 'DELETE') then
     raise exception 'authenticated role must not have DELETE privilege on store_settings';
@@ -130,10 +130,10 @@ begin
   exception when insufficient_privilege then
     null;
   end;
-end $;
+end $$;
 
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
-do $
+do $$
 begin
   begin
     delete from public.store_settings
@@ -142,7 +142,7 @@ begin
   exception when insufficient_privilege then
     null;
   end;
-end $;
+end $$;
 reset role;
 
 -- Weekly-hours validation: valid split shifts pass; overlapping or malformed slots fail.
