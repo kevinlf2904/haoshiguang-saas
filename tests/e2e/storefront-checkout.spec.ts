@@ -52,6 +52,19 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await page.getByRole("button", { name: "登入管理後台" }).click();
   await page.goto("/merchant/settings");
   await expect(page.getByRole("heading", { name: "營業設定" })).toBeVisible();
+  // Emit only non-secret auth diagnostics so CI distinguishes session, membership and UI failures.
+  const authProbe = await page.evaluate(async () => {
+    const response = await fetch("/api/merchant/settings", { cache: "no-store" });
+    const body = await response.json().catch(() => ({}));
+    return {
+      status: response.status,
+      body,
+      cookieNames: document.cookie.split(";").map(item => item.trim().split("=")[0]).filter(Boolean),
+      storageKeys: Object.keys(localStorage).filter(key => key.startsWith("sb-")),
+      pageText: document.body.innerText.slice(0, 1200),
+    };
+  });
+  console.log("MERCHANT_SETTINGS_AUTH_DIAGNOSTIC", JSON.stringify(authProbe));
   // Wait for the authenticated owner controls, not merely the page shell heading.
   await expect(page.getByRole("button", { name: "接單中 · 點擊暫停" })).toBeVisible();
   await expect(page.locator(".prep-time-card input")).toBeVisible();
