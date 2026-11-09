@@ -52,7 +52,8 @@ async function canManage(supabase: NonNullable<Awaited<ReturnType<typeof context
 
 export async function GET(request: NextRequest) {
   const { supabase, userId, response } = await context();
-  if (response || !supabase || !userId) return response;
+  if (response) return response;
+  if (!supabase || !userId) return fail("請先登入店家管理帳號。", 401);
   const { data: memberships, error } = await supabase.from("memberships")
     .select("tenant_id,role,tenants(id,name,slug)").eq("user_id", userId);
   if (error) return fail("無法讀取店家權限。", 403);
@@ -72,7 +73,8 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const { supabase, userId, response } = await context();
-  if (response || !supabase || !userId) return response;
+  if (response) return response;
+  if (!supabase || !userId) return fail("請先登入店家管理帳號。", 401);
   let body: SettingsBody;
   try { body = await request.json() as SettingsBody; } catch { return fail("請確認設定資料格式。", 400); }
   if (typeof body.tenantId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.tenantId)) return fail("店家識別碼格式錯誤。", 400);
