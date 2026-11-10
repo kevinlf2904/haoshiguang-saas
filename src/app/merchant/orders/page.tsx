@@ -131,9 +131,16 @@ export default function MerchantOrdersPage() {
     alertsEnabledRef.current = true;
     setAlertsEnabled(true);
     // Start the permission request directly in the click gesture before awaiting audio.
-    const permissionRequest = "Notification" in window && Notification.permission === "default"
-      ? Notification.requestPermission()
-      : Promise.resolve("Notification" in window ? Notification.permission : "unsupported");
+    let permissionRequest: Promise<unknown> = Promise.resolve("unsupported");
+    try {
+      if ("Notification" in window) {
+        permissionRequest = Notification.permission === "default"
+          ? Notification.requestPermission()
+          : Promise.resolve(Notification.permission);
+      }
+    } catch {
+      // Some browser shells expose Notification but throw when permission is queried.
+    }
     try {
       const AudioContextConstructor = window.AudioContext;
       if (AudioContextConstructor && !audioContext.current) {

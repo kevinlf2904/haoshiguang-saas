@@ -43,6 +43,7 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202611090006
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261109000700_checkout_retention.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110000100_merchant_store_profile.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110000200_public_order_tracking.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110000300_order_retention_scheduler.sql
 
 echo "Seeding pilot catalog..."
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
@@ -52,6 +53,7 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/002_store_busines
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/003_checkout_order_hardening.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/004_merchant_store_profile.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/005_public_order_tracking.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/006_order_retention_scheduler.sql
 bash scripts/test-checkout-concurrency.sh
 
 echo "PASS: isolated PostgreSQL business-settings/RLS/checkout/concurrency tests completed."
