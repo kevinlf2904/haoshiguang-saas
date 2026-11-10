@@ -27,6 +27,12 @@ export async function GET(request: NextRequest) {
   });
   const { data, error } = await supabase.rpc("cleanup_all_public_order_retention");
   if (error) return response("資料保留清理未完成，請檢查維護日誌。", 500);
+  if (Number((data as { tenants_failed?: number } | null)?.tenants_failed || 0) > 0) {
+    return NextResponse.json({ ok: false, cleanup: data }, {
+      status: 500,
+      headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+    });
+  }
 
   return NextResponse.json({ ok: true, cleanup: data }, {
     headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
