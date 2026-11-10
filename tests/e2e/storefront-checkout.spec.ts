@@ -394,6 +394,20 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
       .single();
     expect(retryTrackingError).toBeNull();
     expect(retryTrackingRow?.key_version).toBe(1);
+
+    // Once v1 is intentionally retired, retrying the existing checkout must fail closed.
+    // It must not overwrite the original v1 tracking row or mint a replacement v2 URL.
+    process.env.ORDER_TRACKING_HMAC_KEYS = JSON.stringify({ "2": newRotationSecret });
+    process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = "2";
+    const retryAfterOldKeyRemoval = await postCheckoutWithActiveVersion();
+    expect(retryAfterOldKeyRemoval.status).toBe(503);
+    const { data: retainedTrackingRow, error: retainedTrackingError } = await admin
+      .from("public_order_tracking")
+      .select("key_version")
+      .eq("order_id", firstCheckoutPayload.order!.id!)
+      .single();
+    expect(retainedTrackingError).toBeNull();
+    expect(retainedTrackingRow?.key_version).toBe(1);
   } finally {
     if (savedKeyRing === undefined) delete process.env.ORDER_TRACKING_HMAC_KEYS;
     else process.env.ORDER_TRACKING_HMAC_KEYS = savedKeyRing;
