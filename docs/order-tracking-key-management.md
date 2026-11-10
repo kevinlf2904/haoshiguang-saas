@@ -16,8 +16,8 @@ openssl rand -base64 48
 
 Example shape (replace the example values with independently generated secrets):
 
-```json
-ORDER_TRACKING_HMAC_KEYS={"1":"<secret-version-1>","2":"<secret-version-2>"}
+```sh
+ORDER_TRACKING_HMAC_KEYS='{"1":"<secret-version-1>","2":"<secret-version-2>"}'
 ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION=2
 ```
 
