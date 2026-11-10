@@ -94,6 +94,12 @@ begin
   select id into v_staff_membership from public.memberships
   where tenant_id = v_tenant and user_id = v_staff_user and role = 'staff';
 
+  if public.grant_tenant_member_invite(
+    v_tenant,v_staff_user,'staff-bootstrap-test@example.test','staff',v_second_user
+  ) then
+    raise exception 'Retrying an existing invite must not create a second invitation';
+  end if;
+
   begin
     perform public.grant_tenant_member_invite(
       v_tenant,v_other_user,'manager-escalation-test@example.test','manager',v_second_user
