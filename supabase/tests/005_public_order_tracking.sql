@@ -37,3 +37,28 @@ begin
   end if;
 end
 $$;
+
+
+-- Each tracking digest is bound to the key version used at issuance.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'public_order_tracking'
+      and column_name = 'key_version'
+      and data_type = 'integer'
+      and is_nullable = 'NO'
+  ) then
+    raise exception 'tracking key_version column is missing or nullable';
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.public_order_tracking'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%key_version%'
+  ) then
+    raise exception 'tracking key_version positive constraint is missing';
+  end if;
+end
+$$;
