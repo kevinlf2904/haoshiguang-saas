@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
+import { deriveTrackingToken, hashTrackingToken } from "../../src/lib/order-tracking-crypto.mjs";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -254,6 +255,45 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(merchantPage.getByRole("status").filter({ hasText: "收到 1 筆新訂單" })).toBeVisible();
   await newOrderCard.getByRole("button", { name: "接受訂單" }).click();
   await expect(newOrderCard.locator(".order-status")).toHaveText("已接單");
+
+// Exercise the real tracking API across a key rotation while retaining the previous key.
+  // The disposable E2E keyring has v1 + v2 configured, with v2 active for new orders.
+  const { data: createdOrder, error: createdOrderError } = await admin.from("orders")
+    .select("id").eq("tenant_id", tenant!.id).eq("order_number", checkoutPayload.order!.order_number!).single();
+  expect(createdOrderError).toBeNull();
+  expect(createdOrder).not.toBeNull();
+  const { data: originalTracking, error: originalTrackingError } = await admin.from("public_order_tracking")
+    .select("token_hash,key_version").eq("order_id", createdOrder!.id).single();
+  expect(originalTrackingError).toBeNull();
+  expect(originalTracking).not.toBeNull();
+
+  const rotationTestIdempotencyKey = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const oldRotationSecret = "ci-order-tracking-key-material-at-least-32-bytes";
+  const newRotationSecret = "ci-order-tracking-key-material-version-two-32-bytes";
+  const oldRotationToken = deriveTrackingToken("laozhang", rotationTestIdempotencyKey, oldRotationSecret);
+  const newRotationToken = deriveTrackingToken("laozhang", rotationTestIdempotencyKey, newRotationSecret);
+  try {
+    const { error: oldKeySeedError } = await admin.from("public_order_tracking")
+      .update({ token_hash: hashTrackingToken(oldRotationToken, oldRotationSecret), key_version: 1 })
+      .eq("order_id", createdOrder!.id);
+    expect(oldKeySeedError).toBeNull();
+    const oldKeyResponse = await request.get("/api/orders/" + oldRotationToken);
+    expect(oldKeyResponse.status()).toBe(200);
+    expect((await oldKeyResponse.json()).order.order_number).toBe(checkoutPayload.order!.order_number);
+
+    const { error: newKeySeedError } = await admin.from("public_order_tracking")
+      .update({ token_hash: hashTrackingToken(newRotationToken, newRotationSecret), key_version: 2 })
+      .eq("order_id", createdOrder!.id);
+    expect(newKeySeedError).toBeNull();
+    const newKeyResponse = await request.get("/api/orders/" + newRotationToken);
+    expect(newKeyResponse.status()).toBe(200);
+    expect((await newKeyResponse.json()).order.order_number).toBe(checkoutPayload.order!.order_number);
+  } finally {
+    const { error: restoreTrackingError } = await admin.from("public_order_tracking")
+      .update({ token_hash: originalTracking!.token_hash, key_version: originalTracking!.key_version })
+      .eq("order_id", createdOrder!.id);
+    expect(restoreTrackingError).toBeNull();
+  }
 
   // The bearer tracking URL reflects the merchant's accepted status without exposing PII.
   await page.goto(trackingUrl);
