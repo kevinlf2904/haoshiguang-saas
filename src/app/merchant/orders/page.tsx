@@ -42,8 +42,16 @@ export default function MerchantOrdersPage() {
   const seenOrderIds = useRef<Set<string> | null>(null);
   const alertsEnabledRef = useRef(false);
   const audioContext = useRef<AudioContext | null>(null);
+  const loadInFlight = useRef(false);
+  const refreshQueued = useRef(false);
+  const loadOrdersRef = useRef<() => void>(() => {});
 
   const loadOrders = useCallback(async () => {
+    if (loadInFlight.current) {
+      refreshQueued.current = true;
+      return;
+    }
+    loadInFlight.current = true;
     setError("");
     try {
       const response = await fetch("/api/merchant/orders", { cache: "no-store" });
@@ -76,13 +84,17 @@ export default function MerchantOrdersPage() {
             } catch {
               // Audio is optional; the visual new-order alert remains available.
             }
-            if ("Notification" in window && Notification.permission === "granted") {
-              for (const order of arrivals) {
-                new Notification("好食光｜收到新訂單", {
-                  body: `訂單 #${order.order_number} · NT${Number(order.total).toLocaleString("zh-TW")}`,
-                  tag: `haoshiguang-order-${order.id}`,
-                });
+            try {
+              if ("Notification" in window && Notification.permission === "granted") {
+                for (const order of arrivals) {
+                  new Notification("好食光｜收到新訂單", {
+                    body: `訂單 #${order.order_number} · NT${Number(order.total).toLocaleString("zh-TW")}`,
+                    tag: `haoshiguang-order-${order.id}`,
+                  });
+                }
               }
+            } catch {
+              // Notifications are optional; they must not block refreshing order data.
             }
           }
         }
@@ -93,8 +105,15 @@ export default function MerchantOrdersPage() {
       setError(cause instanceof Error ? cause.message : "載入訂單時發生錯誤。");
     } finally {
       setLoading(false);
+      loadInFlight.current = false;
+      if (refreshQueued.current) {
+        refreshQueued.current = false;
+        loadOrdersRef.current();
+      }
     }
   }, [router]);
+
+  loadOrdersRef.current = () => { void loadOrders(); };
 
   useEffect(() => {
     void loadOrders();
