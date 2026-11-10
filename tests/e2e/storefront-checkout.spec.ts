@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { NextRequest } from "next/server";
+import { POST as createOrder } from "../../src/app/api/orders/route";
 import { createClient } from "@supabase/supabase-js";
 import { deriveTrackingToken, hashTrackingToken } from "../../src/lib/order-tracking-crypto.mjs";
 import { GET as getTrackingOrder } from "../../src/app/api/orders/[token]/route";
@@ -338,5 +340,66 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(page.locator(".tracking-status strong")).toHaveText("店家已接單");
   await expect(page.getByText(customerName, { exact: true })).toHaveCount(0);
   await expect(page.getByText("0912345678", { exact: true })).toHaveCount(0);
+
+  // An idempotent checkout retry during key rotation must return the original
+  // bearer token and retain the original tracking row's key version.
+  const savedKeyRing = process.env.ORDER_TRACKING_HMAC_KEYS;
+  const savedActiveKeyVersion = process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+  const retryIdempotencyKey = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const retryBody = {
+    storeSlug: "laozhang",
+    customerName: "E2E 金鑰輪替重試",
+    customerPhone: "0912345678",
+    fulfillment: "takeaway" as const,
+    tableLabel: "",
+    note: "idempotency rotation test",
+    items: [{ name: "海鮮湯麵", category: "湯麵類", quantity: 1 }],
+  };
+  const postCheckoutWithActiveVersion = async () => createOrder(new NextRequest("http://localhost/api/orders", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": retryIdempotencyKey,
+      "x-vercel-forwarded-for": "203.0.113.20",
+    },
+    body: JSON.stringify(retryBody),
+  }));
+  try {
+    process.env.ORDER_TRACKING_HMAC_KEYS = JSON.stringify({
+      "1": oldRotationSecret,
+      "2": newRotationSecret,
+    });
+    process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = "1";
+    const firstCheckout = await postCheckoutWithActiveVersion();
+    expect(firstCheckout.status).toBe(201);
+    const firstCheckoutPayload = await firstCheckout.json() as {
+      order?: { id?: string; tracking_token?: string };
+    };
+    expect(firstCheckoutPayload.order?.id).toBeTruthy();
+    expect(firstCheckoutPayload.order?.tracking_token).toMatch(/^[a-f0-9]{64}$/);
+
+    process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = "2";
+    const retriedCheckout = await postCheckoutWithActiveVersion();
+    expect(retriedCheckout.status).toBe(201);
+    const retriedCheckoutPayload = await retriedCheckout.json() as {
+      order?: { id?: string; tracking_token?: string };
+    };
+    expect(retriedCheckoutPayload.order?.id).toBe(firstCheckoutPayload.order?.id);
+    expect(retriedCheckoutPayload.order?.tracking_token).toBe(firstCheckoutPayload.order?.tracking_token);
+
+    const { data: retryTrackingRow, error: retryTrackingError } = await admin
+      .from("public_order_tracking")
+      .select("key_version")
+      .eq("order_id", firstCheckoutPayload.order!.id!)
+      .single();
+    expect(retryTrackingError).toBeNull();
+    expect(retryTrackingRow?.key_version).toBe(1);
+  } finally {
+    if (savedKeyRing === undefined) delete process.env.ORDER_TRACKING_HMAC_KEYS;
+    else process.env.ORDER_TRACKING_HMAC_KEYS = savedKeyRing;
+    if (savedActiveKeyVersion === undefined) delete process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+    else process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = savedActiveKeyVersion;
+  }
+
   await merchantPage.close();
 });
