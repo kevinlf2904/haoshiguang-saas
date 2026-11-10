@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - feat/customer-order-tracking
+      - feat/merchant-order-alerts
+      - feat/merchant-order-alerts
   pull_request:
     branches:
       - feat/merchant-product-management
