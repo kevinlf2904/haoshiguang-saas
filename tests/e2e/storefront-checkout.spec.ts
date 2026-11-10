@@ -215,7 +215,7 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(merchantPage.getByText("每 15 秒自動更新")).toBeVisible();
   await merchantPage.context().grantPermissions(["notifications"]);
   await merchantPage.getByRole("button", { name: "開啟新單提示音／通知" }).click();
-  await expect(merchantPage.getByRole("button", { name: "已開啟新單提示音／通知" })).toBeVisible();
+  await expect(merchantPage.getByRole("button", { name: "已開啟新單提示" })).toBeVisible();
 
   await page.goto("/store/laozhang");
   await expect(page.getByText("線上接單中 · 預計備餐 35 分鐘")).toBeVisible();
