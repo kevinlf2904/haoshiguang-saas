@@ -44,6 +44,7 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202611090007
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110000100_merchant_store_profile.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110000200_public_order_tracking.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110000300_order_retention_scheduler.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261111000100_pilot_owner_and_membership_invites.sql
 
 echo "Seeding pilot catalog..."
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
@@ -54,6 +55,7 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/003_checkout_orde
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/004_merchant_store_profile.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/005_public_order_tracking.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/006_order_retention_scheduler.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/007_pilot_owner_bootstrap.sql
 bash scripts/test-checkout-concurrency.sh
 
 echo "PASS: isolated PostgreSQL business-settings/RLS/checkout/concurrency tests completed."
