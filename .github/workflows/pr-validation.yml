@@ -28,17 +28,31 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/haoshiguang_test
     steps:
       - uses: actions/checkout@v4
+      # Decide from the checked-out commit, before npm install can create a
+      # package-lock.json. hashFiles() after bootstrap install is not stable.
+      - name: Detect committed package lock
+        id: lockfile
+        shell: bash
+        run: |
+          if git cat-file -e HEAD:package-lock.json 2>/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Install dependencies (locked)
-        if: hashFiles('package-lock.json') != ''
+        if: steps.lockfile.outputs.present == 'true'
         run: npm ci
       - name: Install dependencies (bootstrap without lockfile)
-        if: hashFiles('package-lock.json') == ''
+        if: steps.lockfile.outputs.present == 'false'
         run: npm install --ignore-scripts
+      # Security gate is mandatory for commits that actually ship a lockfile.
+      # The main bootstrap baseline has no committed lockfile; npm install will
+      # create one in the runner, but that generated file must not change the gate.
       - name: Audit locked dependencies
-        if: hashFiles('package-lock.json') != ''
+        if: steps.lockfile.outputs.present == 'true'
         run: npm audit --audit-level=high
       - name: Typecheck
         run: npm run typecheck
@@ -46,10 +60,11 @@ jobs:
         if: hashFiles('eslint.config.*', '.eslintrc', '.eslintrc.*') != ''
         run: npm run lint
       # The current main baseline has a pre-existing trailing token in globals.css.
-      # PR #1 fixes it and adds the lockfile; require a build once that validated
-      # application baseline is present, rather than misreporting this bootstrap PR.
+      # PR #1 fixes it and adds a committed lockfile; require a build once that
+      # validated application baseline is present, rather than misreporting this
+      # bootstrap PR.
       - name: Build
-        if: hashFiles('package-lock.json') != ''
+        if: steps.lockfile.outputs.present == 'true'
         run: npm run build
       - name: Validate local database URL guard
         run: npm run test:url --if-present
