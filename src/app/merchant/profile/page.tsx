@@ -89,6 +89,7 @@ export default function MerchantProfilePage() {
         <Link href="/merchant/orders">訂單管理</Link>
         <Link href="/merchant/products">商品管理</Link>
         <Link href="/merchant/settings">營業設定</Link>
+        <Link href="/merchant/members">會員管理</Link>
         <button onClick={signOut}>登出</button>
       </nav>
     </header>
