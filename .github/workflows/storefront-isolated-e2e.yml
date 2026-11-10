@@ -11,6 +11,7 @@ on:
       - feat/merchant-store-profile
       - feat/customer-order-tracking
       - feat/merchant-order-alerts
+      - feat/order-alerts-hmac-integration
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
