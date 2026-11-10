@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/customer-order-tracking
+      - fix/order-tracking-hmac-key-rotation
   pull_request:
     branches:
       - feat/merchant-product-management
