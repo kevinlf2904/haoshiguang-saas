@@ -12,6 +12,7 @@ on:
       - feat/merchant-store-profile
       - feat/customer-order-tracking
       - feat/merchant-order-alerts
+      - feat/order-alerts-hmac-integration
 
 permissions:
   contents: read
