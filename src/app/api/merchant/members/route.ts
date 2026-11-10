@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
   const email = body.email.trim().toLowerCase();
   const role = body.role as "manager" | "staff";
 
-  // A completed or partially completed prior request is safe to retry. The
-  // invite record is written before membership so a retry can finish the grant.
+  // The database RPC writes the invite record and membership atomically.
+  // A retry reuses that record and never sends a second Auth invitation.
   const { data: existingInvite, error: inviteLookupError } = await admin.from("tenant_membership_invites")
     .select("user_id,role").eq("tenant_id", body.tenantId).eq("normalized_email", email).maybeSingle();
   if (inviteLookupError) return fail("無法確認既有邀請狀態。", 503);
