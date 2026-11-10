@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import "./orders.css";
@@ -37,6 +37,11 @@ export default function MerchantOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
+  const [newOrderIds, setNewOrderIds] = useState<string[]>([]);
+  const seenOrderIds = useRef<Set<string> | null>(null);
+  const alertsEnabledRef = useRef(false);
+  const audioContext = useRef<AudioContext | null>(null);
 
   const loadOrders = useCallback(async () => {
     setError("");
@@ -45,7 +50,45 @@ export default function MerchantOrdersPage() {
       if (response.status === 401) { router.replace("/merchant/login"); return; }
       const result = await response.json() as { orders?: MerchantOrder[]; error?: string };
       if (!response.ok) throw new Error(result.error || "無法載入訂單。");
-      setOrders(result.orders || []);
+      const nextOrders = result.orders || [];
+      const previousIds = seenOrderIds.current;
+      if (previousIds) {
+        const arrivals = nextOrders.filter(order => order.status === "pending" && !previousIds.has(order.id));
+        if (arrivals.length > 0) {
+          setNewOrderIds(current => Array.from(new Set([...arrivals.map(order => order.id), ...current])));
+          if (alertsEnabledRef.current) {
+            try {
+              if (audioContext.current) {
+                const context = audioContext.current;
+                if (context.state === "suspended") void context.resume();
+                const oscillator = context.createOscillator();
+                const gain = context.createGain();
+                oscillator.type = "sine";
+                oscillator.frequency.setValueAtTime(880, context.currentTime);
+                gain.gain.setValueAtTime(0.0001, context.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.025);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.32);
+                oscillator.connect(gain);
+                gain.connect(context.destination);
+                oscillator.start();
+                oscillator.stop(context.currentTime + 0.34);
+              }
+            } catch {
+              // Audio is optional; the visual new-order alert remains available.
+            }
+            if ("Notification" in window && Notification.permission === "granted") {
+              for (const order of arrivals) {
+                new Notification("好食光｜收到新訂單", {
+                  body: `訂單 #${order.order_number} · ${order.customer_name} · NT${Number(order.total).toLocaleString("zh-TW")}`,
+                  tag: `haoshiguang-order-${order.id}`,
+                });
+              }
+            }
+          }
+        }
+      }
+      seenOrderIds.current = new Set(nextOrders.map(order => order.id));
+      setOrders(nextOrders);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "載入訂單時發生錯誤。");
     } finally {
@@ -53,7 +96,36 @@ export default function MerchantOrdersPage() {
     }
   }, [router]);
 
-  useEffect(() => { void loadOrders(); }, [loadOrders]);
+  useEffect(() => {
+    void loadOrders();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadOrders();
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [loadOrders]);
+
+  async function enableAlerts() {
+    alertsEnabledRef.current = true;
+    setAlertsEnabled(true);
+    try {
+      const AudioContextConstructor = window.AudioContext;
+      if (AudioContextConstructor && !audioContext.current) {
+        audioContext.current = new AudioContextConstructor();
+        await audioContext.current.resume();
+      }
+    } catch {
+      // Browser notification can still work if audio is unavailable.
+    }
+    if ("Notification" in window && Notification.permission === "default") {
+      try { await Notification.requestPermission(); } catch { /* Permission is optional. */ }
+    }
+  }
+
+  function disableAlerts() {
+    alertsEnabledRef.current = false;
+    setAlertsEnabled(false);
+    if (audioContext.current) void audioContext.current.suspend();
+  }
 
   async function updateStatus(order: MerchantOrder, status: OrderStatus) {
     setBusyId(order.id);
@@ -92,6 +164,17 @@ export default function MerchantOrdersPage() {
       <div><span className="merchant-orders-kicker">ORDER MANAGEMENT</span><h1>訂單管理</h1><p>即時查看顧客訂單，並更新備餐進度。</p></div>
       <div className="pending-counter"><strong>{pendingCount}</strong><span>筆待接單</span></div>
     </section>
+    <section className="order-alert-toolbar" aria-label="新訂單提醒設定">
+      <div className="order-refresh-status"><span className="order-live-dot" />每 15 秒自動更新 · 僅在此頁開啟時檢查</div>
+      <button type="button" className={alertsEnabled ? "order-alert-toggle enabled" : "order-alert-toggle"} onClick={() => alertsEnabled ? disableAlerts() : void enableAlerts()}>
+        {alertsEnabled ? "已開啟新單提示" : "開啟新單提示音／通知"}
+      </button>
+    </section>
+    {newOrderIds.length > 0 && <div className="new-order-banner" role="status">
+      <strong>收到 {newOrderIds.length} 筆新訂單</strong>
+      <span>請查看下方待接單項目</span>
+      <button type="button" onClick={() => setNewOrderIds([])}>知道了</button>
+    </div>}
     <nav className="order-filters" aria-label="訂單狀態篩選">
       {(["all","pending","accepted","preparing","ready","completed","cancelled"] as const).map(value =>
         <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>
@@ -105,7 +188,7 @@ export default function MerchantOrdersPage() {
       <section className="merchant-order-list">
         {visibleOrders.map(order => {
           const action = nextAction[order.status];
-          return <article className="merchant-order-card" key={order.id}>
+          return <article className={"merchant-order-card" + (newOrderIds.includes(order.id) ? " is-new-order" : "")} key={order.id}>
             <div className="merchant-order-top">
               <div><span className="merchant-order-number">訂單 #{order.order_number}</span><span className={"order-status status-" + order.status}>{labels[order.status]}</span></div>
               <time dateTime={order.created_at}>{new Date(order.created_at).toLocaleString("zh-TW", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false })}</time>
