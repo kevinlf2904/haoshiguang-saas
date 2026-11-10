@@ -5,13 +5,13 @@ on:
     branches:
       - feat/customer-order-tracking
       - feat/merchant-order-alerts
-      - feat/merchant-order-alerts
   pull_request:
     branches:
       - feat/merchant-product-management
       - main
       - feat/merchant-store-profile
       - feat/customer-order-tracking
+      - feat/merchant-order-alerts
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
