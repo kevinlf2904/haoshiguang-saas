@@ -122,6 +122,39 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
     fulfillment: "takeaway", tableLabel: "", note: "",
     items: [{ name: "海鮮湯麵", category: "湯麵類", quantity: 1 }],
   };
+
+  // A client-controlled X-Forwarded-For must not replace Vercel's ingress value.
+  const missingTrustedIpResponse = await request.post("/api/orders", {
+    data: checkoutBody,
+    headers: {
+      "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa0",
+      "x-vercel-forwarded-for": "",
+      "x-forwarded-for": "198.51.100.77",
+    },
+  });
+  expect(missingTrustedIpResponse.status()).toBe(400);
+  expect((await missingTrustedIpResponse.json()).error).toContain("連線來源");
+
+  const chainedTrustedIpResponse = await request.post("/api/orders", {
+    data: checkoutBody,
+    headers: {
+      "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
+      "x-vercel-forwarded-for": "203.0.113.10, 198.51.100.77",
+      "x-forwarded-for": "198.51.100.77",
+    },
+  });
+  expect(chainedTrustedIpResponse.status()).toBe(400);
+  expect((await chainedTrustedIpResponse.json()).error).toContain("連線來源");
+
+  const malformedTrustedIpResponse = await request.post("/api/orders", {
+    data: checkoutBody,
+    headers: {
+      "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+      "x-vercel-forwarded-for": "not-an-ip",
+    },
+  });
+  expect(malformedTrustedIpResponse.status()).toBe(400);
+  expect((await malformedTrustedIpResponse.json()).error).toContain("連線來源");
   const pausedResponse = await request.post("/api/orders", { data: checkoutBody, headers: { "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1" } });
   expect(pausedResponse.status()).toBe(404);
   expect((await pausedResponse.json()).error).toContain("暫停接單");
