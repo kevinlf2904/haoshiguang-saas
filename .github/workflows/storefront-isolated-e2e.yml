@@ -109,6 +109,9 @@ jobs:
       - name: Seed pilot catalog into disposable Supabase
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
 
+      - name: Verify scheduled retention SQL permissions and cleanup
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/006_order_retention_scheduler.sql
+
       - name: Create isolated merchant login fixture
         run: node scripts/e2e/create-merchant-user.mjs
 
