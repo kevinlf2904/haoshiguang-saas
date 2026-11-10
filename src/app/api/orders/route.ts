@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
 
   // Derive a stable bearer token from the UUID idempotency key so retries
   // return the same tracking URL without storing the raw token in the database.
-  const trackingToken = await keyedHash(`tracking:${idempotencyKey}`, serviceRoleKey);
+  const trackingToken = await keyedHash(`tracking:${body.storeSlug}:${idempotencyKey}`, serviceRoleKey);
   const trackingTokenHash = await keyedHash(`tracking-hash:${trackingToken}`, serviceRoleKey);
   const { data, error } = await supabase.rpc("create_public_order", {
     p_tenant_slug: body.storeSlug,
