@@ -234,17 +234,31 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await page.getByRole("link", { name: /查看訂單進度/ }).click();
   await expect(page).toHaveURL(/\/order\/[a-f0-9]{64}$/);
   await expect(page.getByRole("heading", { name: "查看訂單進度" })).toBeVisible();
-  await expect(page.getByText("等待店家確認")).toBeVisible();
+  await expect(page.locator(".tracking-status strong")).toHaveText("等待店家確認");
   await expect(page.getByText("海鮮湯麵 × 1")).toBeVisible();
-  await expect(page.getByText("NT$180", { exact: true })).toBeVisible();
+  await expect(page.locator(".tracking-details")).toContainText("NT$180");
   const trackingUrl = page.url();
 
-  // The same committed order is visible to the authenticated tenant and can be accepted.
-  await page.goto("/merchant/orders");
-  await expect(page.getByText(customerName)).toBeVisible();
-  await expect(page.getByText("海鮮湯麵 × 1")).toBeVisible();
-  await page.getByRole("button", { name: "接受訂單" }).first().click();
-  await expect(page.getByText("已接單").first()).toBeVisible();
+  // Keep a second merchant tab open before checkout to verify background polling.
+  const merchantPage = await page.context().newPage();
+  await merchantPage.goto("/merchant/orders");
+  await expect(merchantPage.getByRole("heading", { name: "訂單管理" })).toBeVisible();
+  await expect(merchantPage.getByText("每 15 秒自動更新")).toBeVisible();
+
+  // The same committed order appears in the already-open merchant tab without a manual refresh.
+  await expect(merchantPage.getByText(customerName, { exact: true })).toBeVisible({ timeout: 20_000 });
+  const newOrderCard = merchantPage.locator(".merchant-order-card").filter({ hasText: customerName });
+  await expect(newOrderCard).toHaveClass(/is-new-order/);
+  await expect(merchantPage.getByRole("status").filter({ hasText: "收到 1 筆新訂單" })).toBeVisible();
+  await newOrderCard.getByRole("button", { name: "接受訂單" }).click();
+  await expect(newOrderCard.getByText("已接單")).toBeVisible();
+
+  // The bearer tracking URL reflects the merchant's accepted status without exposing PII.
+  await page.goto(trackingUrl);
+  await expect(page.getByText("店家已接單")).toBeVisible();
+  await expect(page.getByText(customerName, { exact: true })).toHaveCount(0);
+  await expect(page.getByText("0912345678", { exact: true })).toHaveCount(0);
+  await merchantPage.close();
 
   // The bearer tracking URL reflects the merchant's accepted status without exposing PII.
   await page.goto(trackingUrl);
