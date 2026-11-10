@@ -2,7 +2,7 @@ name: PR validation
 
 on:
   push:
-    branches: [main, feat/customer-order-tracking, feat/merchant-order-alerts]
+    branches: [main]
   pull_request:
     branches: [main, feat/pilot-foundation-hardening, feat/customer-ordering-storefront, feat/merchant-store-profile, feat/customer-order-tracking, feat/merchant-order-alerts]
 
