@@ -125,7 +125,7 @@ export default function MerchantProductsPage() {
   return <main className="merchant-products-shell">
     <header className="merchant-products-header">
       <Link href="/" className="merchant-products-brand">好食光 <span>店家管理</span></Link>
-      <div><Link href="/merchant/orders">訂單管理</Link><Link href="/merchant/settings">營業設定</Link><button onClick={signOut}>登出</button></div>
+      <div><Link href="/merchant/orders">訂單管理</Link><Link href="/merchant/settings">營業設定</Link><Link href="/merchant/members">會員管理</Link><button onClick={signOut}>登出</button></div>
     </header>
     <section className="merchant-products-intro">
       <div><span className="merchant-products-kicker">MENU MANAGEMENT</span><h1>商品管理</h1><p>管理店內分類、商品價格與販售狀態。</p></div>
