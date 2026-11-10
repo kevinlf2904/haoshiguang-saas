@@ -9,3 +9,4 @@ create table public.public_order_tracking (
 
 alter table public.public_order_tracking enable row level security;
 revoke all on public.public_order_tracking from public, anon, authenticated;
+\ngrant all on public.public_order_tracking to service_role;\n
