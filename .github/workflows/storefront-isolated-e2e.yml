@@ -5,7 +5,7 @@ on:
     branches:
       - feat/merchant-product-management
       - main
-      - feat/merchant-store-profile
+      - feat/customer-order-tracking
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
