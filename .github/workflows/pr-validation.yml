@@ -40,10 +40,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
+        if: hashFiles('eslint.config.*', '.eslintrc', '.eslintrc.*') != ''
         run: npm run lint
-      - name: Validate local database URL guard
-        run: npm run test:url --if-present
       - name: Build
         run: npm run build
+      - name: Validate local database URL guard
+        run: npm run test:url --if-present
       - name: PostgreSQL migration and seed tests
         run: npm run test:db --if-present
