@@ -81,16 +81,14 @@ export async function POST(request: NextRequest) {
   if (inviteLookupError) return fail("無法確認既有邀請狀態。", 503);
   if (existingInvite) {
     if (existingInvite.role !== role) return fail("此電子郵件已有不同角色的邀請，請先撤銷會員權限再重新邀請。", 409);
-    const { data: existingMembership, error: membershipLookupError } = await admin.from("memberships")
-      .select("id,role").eq("tenant_id", body.tenantId).eq("user_id", existingInvite.user_id).maybeSingle();
-    if (membershipLookupError) return fail("無法確認會員狀態。", 503);
-    if (existingMembership && existingMembership.role !== role) return fail("會員目前角色與邀請紀錄不一致，請聯絡系統管理員。", 409);
-    if (!existingMembership) {
-      const { error: retryGrantError } = await admin.from("memberships").insert({
-        tenant_id: body.tenantId, user_id: existingInvite.user_id, role,
-      });
-      if (retryGrantError) return fail("重試會員權限建立失敗。", 503);
-    }
+    const { error: retryGrantError } = await admin.rpc("grant_tenant_member_invite", {
+      target_tenant_id: body.tenantId,
+      target_user_id: existingInvite.user_id,
+      target_email: email,
+      target_role: role,
+      actor_user_id: userId,
+    });
+    if (retryGrantError) return fail("重試會員權限建立失敗，請重新整理後再試。", retryGrantError.code === "42501" ? 403 : 409);
     return NextResponse.json({ ok: true, message: "此會員邀請已存在，權限已確認。" }, {
       status: 202, headers: { "Cache-Control": "no-store" },
     });
@@ -99,23 +97,17 @@ export async function POST(request: NextRequest) {
   const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
   if (inviteError || !invited.user) return fail("邀請失敗；此電子郵件可能已註冊或已有待處理邀請。", 409);
 
-  const { error: inviteRecordError } = await admin.from("tenant_membership_invites").insert({
-    tenant_id: body.tenantId, normalized_email: email, user_id: invited.user.id,
-    role, invited_by: userId,
-  });
-  if (inviteRecordError) {
-    await admin.auth.admin.deleteUser(invited.user.id);
-    return fail("邀請紀錄建立失敗，已回復本次建立的 Auth 帳號。", 409);
-  }
-
-  const { error: membershipError } = await admin.from("memberships").insert({
-    tenant_id: body.tenantId, user_id: invited.user.id, role,
+  const { error: membershipError } = await admin.rpc("grant_tenant_member_invite", {
+    target_tenant_id: body.tenantId,
+    target_user_id: invited.user.id,
+    target_email: email,
+    target_role: role,
+    actor_user_id: userId,
   });
   if (membershipError) {
-    await admin.from("tenant_membership_invites").delete()
-      .eq("tenant_id", body.tenantId).eq("normalized_email", email);
-    await admin.auth.admin.deleteUser(invited.user.id);
-    return fail("會員權限建立失敗，已回復本次建立的邀請與 Auth 帳號。", 409);
+    const { error: cleanupError } = await admin.auth.admin.deleteUser(invited.user.id);
+    if (cleanupError) return fail("會員權限建立失敗，且 Auth 邀請帳號清理未完成；請聯絡系統管理員。", 503);
+    return fail("會員權限建立失敗，已回復本次建立的 Auth 邀請帳號。", membershipError.code === "42501" ? 403 : 409);
   }
 
   return NextResponse.json({ ok: true, message: "已寄出會員邀請。" }, {
@@ -153,6 +145,7 @@ export async function DELETE(request: NextRequest) {
   const { error: removeError } = await admin.rpc("remove_tenant_member", {
     target_tenant_id: body.tenantId,
     target_membership_id: target.id,
+    actor_user_id: userId,
   });
   if (removeError) return fail("移除會員失敗，請重新整理後再試。", removeError.code === "P0002" ? 404 : 503);
   return NextResponse.json({ ok: true });
