@@ -112,6 +112,9 @@ jobs:
       - name: Verify scheduled retention SQL permissions and cleanup
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/006_order_retention_scheduler.sql
 
+      - name: Verify one-time Pilot owner bootstrap permissions and replay protection
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/007_pilot_owner_bootstrap.sql
+
       - name: Create isolated merchant login fixture
         run: node scripts/e2e/create-merchant-user.mjs
 
