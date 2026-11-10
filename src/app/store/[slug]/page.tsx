@@ -29,7 +29,7 @@ export default function StorefrontPage() {
   const [submitting, setSubmitting] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
-  const [confirmedOrder, setConfirmedOrder] = useState<{ order_number: number; total: number } | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<{ order_number: number; total: number; tracking_token: string } | null>(null);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState(false);
@@ -163,11 +163,14 @@ export default function StorefrontPage() {
           items: cart.map((line) => ({ name: line.item.name, category: categories.find(category => category.id === line.item.category_id)?.name || "", quantity: line.quantity })),
         }),
       });
-      const result = await response.json() as { order?: { order_number: number; total: number }; error?: string };
+      const result = await response.json() as { order?: { order_number: number; total: number; tracking_token: string }; error?: string };
       if (!response.ok || !result.order) throw new Error(result.error || "訂單建立失敗，請稍後再試。");
       const confirmedTotal = Number(result.order.total);
       if (!Number.isFinite(confirmedTotal) || confirmedTotal < 0) {
         throw new Error("訂單已送出，但金額資料異常，請聯絡店家確認。");
+      }
+      if (typeof result.order.tracking_token !== "string" || !/^[a-f0-9]{64}$/.test(result.order.tracking_token)) {
+        throw new Error("訂單已送出，但查詢連結資料異常，請聯絡店家確認。");
       }
       setConfirmedOrder({ ...result.order, total: confirmedTotal });
       setCart([]);
@@ -279,7 +282,7 @@ export default function StorefrontPage() {
           </div>
           <div className="cart-total"><span>商品小計</span><strong>{money(subtotal)}</strong></div>
           {confirmedOrder ? (
-            <div className="checkout-result" role="status"><strong>訂單已建立</strong><b>訂單編號 #{confirmedOrder.order_number}</b><span>應付金額 {money(confirmedOrder.total)}</span><small>請向店家確認接單狀態；目前僅支援現場付款。</small><button onClick={() => setConfirmedOrder(null)}>繼續點餐</button></div>
+            <div className="checkout-result" role="status"><strong>訂單已建立</strong><b>訂單編號 #{confirmedOrder.order_number}</b><span>應付金額 {money(confirmedOrder.total)}</span><small>目前僅支援現場付款。請使用下方專屬連結查看訂單進度。</small><Link className="track-order-link" href={`/order/${confirmedOrder.tracking_token}`}>查看訂單進度 →</Link><button onClick={() => setConfirmedOrder(null)}>繼續點餐</button></div>
           ) : (
             <><button className="checkout-button" onClick={submitOrder} disabled={submitting || settingsLoading || settingsError || !isOpenNow || cart.length === 0}>{submitting ? "正在送出…" : "送出訂單"} <span>→</span></button>
             {checkoutError && <p className="checkout-error" role="alert">{checkoutError}</p>}
