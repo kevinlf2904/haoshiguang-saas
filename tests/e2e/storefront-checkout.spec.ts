@@ -218,8 +218,8 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
     Object.defineProperty(window, "AudioContext", { value: undefined, configurable: true });
     (window as Window & { __notificationConstructorCalls?: number }).__notificationConstructorCalls = 0;
     class FailingNotification {
-      static permission = "granted";
-      static requestPermission = async () => "granted";
+      static get permission() { return "default"; }
+      static requestPermission() { return Promise.reject("permission unavailable"); }
       constructor() {
         const target = window as Window & { __notificationConstructorCalls?: number };
         target.__notificationConstructorCalls = (target.__notificationConstructorCalls || 0) + 1;
