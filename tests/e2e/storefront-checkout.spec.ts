@@ -202,12 +202,20 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   expect(holidayResponse.status()).toBe(409);
   expect((await holidayResponse.json()).error).toContain("公休日");
 
-  // Remove the holiday and create a real order through the customer-facing browser flow.
+  // Remove the holiday and prepare a merchant tab before a new order is created.
   await page.goto("/merchant/settings");
   await page.locator(".closed-date-list span").filter({ hasText: today })
     .getByRole("button", { name: "移除" }).click();
   await page.getByRole("button", { name: "儲存營業設定" }).click();
   await expect(page.getByRole("status")).toContainText("營業設定已儲存");
+
+  const merchantPage = await page.context().newPage();
+  await merchantPage.goto("/merchant/orders");
+  await expect(merchantPage.getByRole("heading", { name: "訂單管理" })).toBeVisible();
+  await expect(merchantPage.getByText("每 15 秒自動更新")).toBeVisible();
+  await merchantPage.context().grantPermissions(["notifications"]);
+  await merchantPage.getByRole("button", { name: "開啟新單提示音／通知" }).click();
+  await expect(merchantPage.getByRole("button", { name: "已開啟新單提示音／通知" })).toBeVisible();
 
   await page.goto("/store/laozhang");
   await expect(page.getByText("線上接單中 · 預計備餐 35 分鐘")).toBeVisible();
@@ -239,16 +247,18 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(page.locator(".tracking-details")).toContainText("NT$180");
   const trackingUrl = page.url();
 
-  // The same committed order is visible to the authenticated tenant and can be accepted.
-  await page.goto("/merchant/orders");
-  await expect(page.getByText(customerName)).toBeVisible();
-  await expect(page.getByText("海鮮湯麵 × 1")).toBeVisible();
-  await page.getByRole("button", { name: "接受訂單" }).first().click();
-  await expect(page.getByText("已接單").first()).toBeVisible();
+  // The new order appears in the already-open merchant tab without a manual refresh.
+  await expect(merchantPage.getByText(customerName, { exact: true })).toBeVisible({ timeout: 20_000 });
+  const newOrderCard = merchantPage.locator(".merchant-order-card").filter({ hasText: customerName });
+  await expect(newOrderCard).toHaveClass(/is-new-order/);
+  await expect(merchantPage.getByRole("status").filter({ hasText: "收到 1 筆新訂單" })).toBeVisible();
+  await newOrderCard.getByRole("button", { name: "接受訂單" }).click();
+  await expect(newOrderCard.locator(".order-status")).toHaveText("已接單");
 
   // The bearer tracking URL reflects the merchant's accepted status without exposing PII.
   await page.goto(trackingUrl);
   await expect(page.locator(".tracking-status strong")).toHaveText("店家已接單");
   await expect(page.getByText(customerName, { exact: true })).toHaveCount(0);
   await expect(page.getByText("0912345678", { exact: true })).toHaveCount(0);
+  await merchantPage.close();
 });
