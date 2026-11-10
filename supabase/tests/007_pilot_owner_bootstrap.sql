@@ -30,6 +30,19 @@ begin
     raise exception 'Bootstrap state must be private to trusted server execution';
   end if;
 
+  if has_table_privilege('anon','public.tenant_membership_invites','SELECT')
+     or has_table_privilege('authenticated','public.tenant_membership_invites','SELECT')
+     or has_table_privilege('authenticated','public.tenant_membership_invites','INSERT')
+     or has_table_privilege('authenticated','public.tenant_membership_invites','UPDATE')
+     or has_table_privilege('authenticated','public.tenant_membership_invites','DELETE') then
+    raise exception 'Membership invite records must be inaccessible to browser roles';
+  end if;
+  if has_table_privilege('authenticated','public.memberships','INSERT')
+     or has_table_privilege('authenticated','public.memberships','UPDATE')
+     or has_table_privilege('authenticated','public.memberships','DELETE') then
+    raise exception 'Browser roles must not mutate tenant memberships directly';
+  end if;
+
   perform set_config('request.jwt.claim.role','service_role',true);
   perform public.bootstrap_pilot_owner(v_tenant,v_user);
 
