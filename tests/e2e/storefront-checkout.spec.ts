@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { NextRequest } from "next/server";
+import { POST as createOrder } from "../../src/app/api/orders/route";
 import { createClient } from "@supabase/supabase-js";
+import { deriveTrackingToken, hashTrackingToken } from "../../src/lib/order-tracking-crypto.mjs";
+import { GET as getTrackingOrder } from "../../src/app/api/orders/[token]/route";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -255,10 +259,161 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await newOrderCard.getByRole("button", { name: "接受訂單" }).click();
   await expect(newOrderCard.locator(".order-status")).toHaveText("已接單");
 
+// Exercise the real tracking API across a key rotation while retaining the previous key.
+  // The disposable E2E keyring has v1 + v2 configured, with v2 active for new orders.
+  const { data: createdOrder, error: createdOrderError } = await admin.from("orders")
+    .select("id").eq("tenant_id", tenant!.id).eq("order_number", checkoutPayload.order!.order_number!).single();
+  expect(createdOrderError).toBeNull();
+  expect(createdOrder).not.toBeNull();
+  const { data: originalTracking, error: originalTrackingError } = await admin.from("public_order_tracking")
+    .select("token_hash,key_version").eq("order_id", createdOrder!.id).single();
+  expect(originalTrackingError).toBeNull();
+  expect(originalTracking).not.toBeNull();
+
+  const rotationTestIdempotencyKey = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const oldRotationSecret = "ci-order-tracking-key-material-at-least-32-bytes";
+  const newRotationSecret = "ci-order-tracking-key-material-version-two-32-bytes";
+  const oldRotationToken = deriveTrackingToken("laozhang", rotationTestIdempotencyKey, oldRotationSecret);
+  const newRotationToken = deriveTrackingToken("laozhang", rotationTestIdempotencyKey, newRotationSecret);
+  try {
+    const { error: oldKeySeedError } = await admin.from("public_order_tracking")
+      .update({ token_hash: hashTrackingToken(oldRotationToken, oldRotationSecret), key_version: 1 })
+      .eq("order_id", createdOrder!.id);
+    expect(oldKeySeedError).toBeNull();
+    const oldKeyResponse = await request.get("/api/orders/" + oldRotationToken);
+    expect(oldKeyResponse.status()).toBe(200);
+    expect((await oldKeyResponse.json()).order.order_number).toBe(checkoutPayload.order!.order_number);
+
+    // Removing v1 from the configured key ring must invalidate a v1 bearer token.
+    const originalKeyRing = process.env.ORDER_TRACKING_HMAC_KEYS;
+    const originalActiveKeyVersion = process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+    try {
+      process.env.ORDER_TRACKING_HMAC_KEYS = JSON.stringify({ "2": newRotationSecret });
+      process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = "2";
+      const removedOldKeyResponse = await getTrackingOrder(
+        {} as never,
+        { params: Promise.resolve({ token: oldRotationToken }) },
+      );
+      expect(removedOldKeyResponse.status).toBe(404);
+    } finally {
+      if (originalKeyRing === undefined) delete process.env.ORDER_TRACKING_HMAC_KEYS;
+      else process.env.ORDER_TRACKING_HMAC_KEYS = originalKeyRing;
+      if (originalActiveKeyVersion === undefined) delete process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+      else process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = originalActiveKeyVersion;
+    }
+
+    const { error: newKeySeedError } = await admin.from("public_order_tracking")
+      .update({ token_hash: hashTrackingToken(newRotationToken, newRotationSecret), key_version: 2 })
+      .eq("order_id", createdOrder!.id);
+    expect(newKeySeedError).toBeNull();
+    const newKeyResponse = await request.get("/api/orders/" + newRotationToken);
+    expect(newKeyResponse.status()).toBe(200);
+    expect((await newKeyResponse.json()).order.order_number).toBe(checkoutPayload.order!.order_number);
+
+    // Missing key-ring configuration must fail closed before any database lookup.
+    const savedKeys = process.env.ORDER_TRACKING_HMAC_KEYS;
+    const savedActiveVersion = process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+    try {
+      delete process.env.ORDER_TRACKING_HMAC_KEYS;
+      delete process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+      const missingKeyRingResponse = await getTrackingOrder(
+        {} as never,
+        { params: Promise.resolve({ token: newRotationToken }) },
+      );
+      expect(missingKeyRingResponse.status).toBe(503);
+      expect((await missingKeyRingResponse.json()).error).toContain("暫時無法使用");
+    } finally {
+      if (savedKeys === undefined) delete process.env.ORDER_TRACKING_HMAC_KEYS;
+      else process.env.ORDER_TRACKING_HMAC_KEYS = savedKeys;
+      if (savedActiveVersion === undefined) delete process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+      else process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = savedActiveVersion;
+    }
+  } finally {
+    const { error: restoreTrackingError } = await admin.from("public_order_tracking")
+      .update({ token_hash: originalTracking!.token_hash, key_version: originalTracking!.key_version })
+      .eq("order_id", createdOrder!.id);
+    expect(restoreTrackingError).toBeNull();
+  }
+
   // The bearer tracking URL reflects the merchant's accepted status without exposing PII.
   await page.goto(trackingUrl);
   await expect(page.locator(".tracking-status strong")).toHaveText("店家已接單");
   await expect(page.getByText(customerName, { exact: true })).toHaveCount(0);
   await expect(page.getByText("0912345678", { exact: true })).toHaveCount(0);
+
+  // An idempotent checkout retry during key rotation must return the original
+  // bearer token and retain the original tracking row's key version.
+  const savedKeyRing = process.env.ORDER_TRACKING_HMAC_KEYS;
+  const savedActiveKeyVersion = process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+  const retryIdempotencyKey = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const retryBody = {
+    storeSlug: "laozhang",
+    customerName: "E2E 金鑰輪替重試",
+    customerPhone: "0912345678",
+    fulfillment: "takeaway" as const,
+    tableLabel: "",
+    note: "idempotency rotation test",
+    items: [{ name: "海鮮湯麵", category: "湯麵類", quantity: 1 }],
+  };
+  const postCheckoutWithActiveVersion = async () => createOrder(new NextRequest("http://localhost/api/orders", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": retryIdempotencyKey,
+      "x-vercel-forwarded-for": "203.0.113.20",
+    },
+    body: JSON.stringify(retryBody),
+  }));
+  try {
+    process.env.ORDER_TRACKING_HMAC_KEYS = JSON.stringify({
+      "1": oldRotationSecret,
+      "2": newRotationSecret,
+    });
+    process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = "1";
+    const firstCheckout = await postCheckoutWithActiveVersion();
+    expect(firstCheckout.status).toBe(201);
+    const firstCheckoutPayload = await firstCheckout.json() as {
+      order?: { id?: string; tracking_token?: string };
+    };
+    expect(firstCheckoutPayload.order?.id).toBeTruthy();
+    expect(firstCheckoutPayload.order?.tracking_token).toMatch(/^[a-f0-9]{64}$/);
+
+    process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = "2";
+    const retriedCheckout = await postCheckoutWithActiveVersion();
+    expect(retriedCheckout.status).toBe(201);
+    const retriedCheckoutPayload = await retriedCheckout.json() as {
+      order?: { id?: string; tracking_token?: string };
+    };
+    expect(retriedCheckoutPayload.order?.id).toBe(firstCheckoutPayload.order?.id);
+    expect(retriedCheckoutPayload.order?.tracking_token).toBe(firstCheckoutPayload.order?.tracking_token);
+
+    const { data: retryTrackingRow, error: retryTrackingError } = await admin
+      .from("public_order_tracking")
+      .select("key_version")
+      .eq("order_id", firstCheckoutPayload.order!.id!)
+      .single();
+    expect(retryTrackingError).toBeNull();
+    expect(retryTrackingRow?.key_version).toBe(1);
+
+    // Once v1 is intentionally retired, retrying the existing checkout must fail closed.
+    // It must not overwrite the original v1 tracking row or mint a replacement v2 URL.
+    process.env.ORDER_TRACKING_HMAC_KEYS = JSON.stringify({ "2": newRotationSecret });
+    process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = "2";
+    const retryAfterOldKeyRemoval = await postCheckoutWithActiveVersion();
+    expect(retryAfterOldKeyRemoval.status).toBe(503);
+    const { data: retainedTrackingRow, error: retainedTrackingError } = await admin
+      .from("public_order_tracking")
+      .select("key_version")
+      .eq("order_id", firstCheckoutPayload.order!.id!)
+      .single();
+    expect(retainedTrackingError).toBeNull();
+    expect(retainedTrackingRow?.key_version).toBe(1);
+  } finally {
+    if (savedKeyRing === undefined) delete process.env.ORDER_TRACKING_HMAC_KEYS;
+    else process.env.ORDER_TRACKING_HMAC_KEYS = savedKeyRing;
+    if (savedActiveKeyVersion === undefined) delete process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+    else process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = savedActiveKeyVersion;
+  }
+
   await merchantPage.close();
 });
