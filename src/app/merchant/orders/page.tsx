@@ -98,10 +98,14 @@ export default function MerchantOrdersPage() {
 
   useEffect(() => {
     void loadOrders();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadOrders();
-    }, 15_000);
-    return () => window.clearInterval(interval);
+    const interval = window.setInterval(() => { void loadOrders(); }, 15_000);
+    return () => {
+      window.clearInterval(interval);
+      if (audioContext.current) {
+        void audioContext.current.close();
+        audioContext.current = null;
+      }
+    };
   }, [loadOrders]);
 
   async function enableAlerts() {
