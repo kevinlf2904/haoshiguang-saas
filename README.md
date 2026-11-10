@@ -24,7 +24,7 @@
 4. 複製 `.env.example` 為 `.env.local`，填入本機 Supabase URL、anon key、service-role key，以及專用的 tracking HMAC key ring。
 5. 啟動本機 Supabase：`supabase start`。
 6. 套用所有 timestamped migrations：`supabase db reset`。此命令會重設**本機 Supabase**資料庫；不可對 hosted／正式專案執行。
-7. 依本機 Supabase 狀態輸出取得 DB URL，將 Pilot seed 套用到本機資料庫：`psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql`。
+7. 執行 `supabase status -o env` 查看本機連線資訊，將其中的 `DB_URL` 設定到目前 shell（不要把包含金鑰的完整輸出貼到公開位置），再執行 `psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql`。
 8. 啟動 Next.js：`npm run dev`。
 
 若只執行 `npm run test:db`，該腳本使用 disposable localhost PostgreSQL，僅驗證基礎 migration 與 seed idempotency；完整 migrations、RLS、排程 SQL 與瀏覽器流程由 `.github/workflows/storefront-isolated-e2e.yml` 在隔離 Supabase 執行。
