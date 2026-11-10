@@ -6,6 +6,7 @@ test("cron authorization fails closed for missing or malformed credentials", () 
   assert.equal(isAuthorizedCronRequest(null, "long-random-secret"), false);
   assert.equal(isAuthorizedCronRequest("Bearer wrong-secret", "long-random-secret"), false);
   assert.equal(isAuthorizedCronRequest("Basic long-random-secret", "long-random-secret"), false);
+  assert.equal(isAuthorizedCronRequest("Bearer  long-random-secret", "long-random-secret"), false);
   assert.equal(isAuthorizedCronRequest("Bearer long-random-secret", ""), false);
   assert.equal(isAuthorizedCronRequest("Bearer long-random-secret-extra", "long-random-secret"), false);
 });
