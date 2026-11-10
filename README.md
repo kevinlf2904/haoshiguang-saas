@@ -10,7 +10,9 @@
 - 技術：Next.js App Router、TypeScript、Supabase PostgreSQL + Auth、Vercel
 
 ## 開發狀態
-目前為專案起始骨架與資料庫初始 migration。尚未完成 Supabase 專案連線、登入流程、完整 RLS 驗證、訂單 API、正式付款或正式營運部署。不要將目前預覽頁視為可接收真實訂單的系統。
+目前已完成第一階段 Pilot 功能：老張麵店顧客菜單與購物車、伺服器端價格重算及訂單建立、店家登入與訂單狀態管理、商品／分類管理、營業時間／公休／暫停接單，以及店家名稱／電話／地址管理。資料庫 migration、RLS、結帳併發與隔離測試均以 disposable local PostgreSQL／Supabase 為驗證環境。
+
+尚未完成 hosted Supabase 專案設定與 migration 部署、正式帳號邀請／管理流程、正式環境端到端驗收、線上付款及正式營運部署。不要將 GitHub CI 或本機 E2E 通過視為 hosted production 已驗證，也不要將目前頁面視為可接收真實訂單的正式服務。
 
 ## 本機啟動
 1. 安裝 Node.js 20+

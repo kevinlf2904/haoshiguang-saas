@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, feat/pilot-foundation-hardening, feat/customer-ordering-storefront]
+    branches: [main, feat/pilot-foundation-hardening, feat/customer-ordering-storefront, feat/merchant-store-profile, feat/customer-order-tracking]
 
 permissions:
   contents: read

@@ -5,6 +5,9 @@ on:
     branches:
       - feat/merchant-product-management
       - feat/merchant-business-settings
+      - main
+      - feat/merchant-store-profile
+      - feat/customer-order-tracking
 
 permissions:
   contents: read
