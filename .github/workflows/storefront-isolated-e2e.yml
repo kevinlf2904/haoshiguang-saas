@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - feat/merchant-product-management
+      - main
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
