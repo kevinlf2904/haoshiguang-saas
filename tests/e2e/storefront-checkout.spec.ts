@@ -214,6 +214,20 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(page.getByRole("status")).toContainText("營業設定已儲存");
 
   const merchantPage = await page.context().newPage();
+  await merchantPage.addInitScript(() => {
+    Object.defineProperty(window, "AudioContext", { value: undefined, configurable: true });
+    (window as Window & { __notificationConstructorCalls?: number }).__notificationConstructorCalls = 0;
+    class FailingNotification {
+      static permission = "granted";
+      static requestPermission = async () => "granted";
+      constructor() {
+        const target = window as Window & { __notificationConstructorCalls?: number };
+        target.__notificationConstructorCalls = (target.__notificationConstructorCalls || 0) + 1;
+        throw new Error("simulated Notification constructor failure");
+      }
+    }
+    Object.defineProperty(window, "Notification", { value: FailingNotification, configurable: true });
+  });
   await merchantPage.goto("/merchant/orders");
   await expect(merchantPage.getByRole("heading", { name: "訂單管理" })).toBeVisible();
   await expect(merchantPage.getByText("每 15 秒自動更新")).toBeVisible();
@@ -256,6 +270,10 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   const newOrderCard = merchantPage.locator(".merchant-order-card").filter({ hasText: customerName });
   await expect(newOrderCard).toHaveClass(/is-new-order/);
   await expect(merchantPage.getByRole("status").filter({ hasText: "收到 1 筆新訂單" })).toBeVisible();
+  const notificationConstructorCalls = await merchantPage.evaluate(() =>
+    (window as Window & { __notificationConstructorCalls?: number }).__notificationConstructorCalls || 0
+  );
+  expect(notificationConstructorCalls).toBeGreaterThan(0);
   await newOrderCard.getByRole("button", { name: "接受訂單" }).click();
   await expect(newOrderCard.locator(".order-status")).toHaveText("已接單");
 
