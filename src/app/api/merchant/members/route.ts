@@ -150,11 +150,10 @@ export async function DELETE(request: NextRequest) {
   if (target.role === "owner") return fail("目前不支援移除負責人，請先建立正式負責人移轉流程。", 409);
   if (actor.role === "manager" && target.role !== "staff") return fail("管理者只能移除員工。", 403);
 
-  const { error: deleteError } = await admin.from("memberships").delete()
-    .eq("id", target.id).eq("tenant_id", body.tenantId);
-  if (deleteError) return fail("移除會員失敗。", 503);
-  const { error: inviteDeleteError } = await admin.from("tenant_membership_invites").delete()
-    .eq("tenant_id", body.tenantId).eq("user_id", target.user_id);
-  if (inviteDeleteError) return fail("會員已移除，但清理邀請紀錄失敗；請稍後重試。", 503);
+  const { error: removeError } = await admin.rpc("remove_tenant_member", {
+    target_tenant_id: body.tenantId,
+    target_membership_id: target.id,
+  });
+  if (removeError) return fail("移除會員失敗，請重新整理後再試。", removeError.code === "P0002" ? 404 : 503);
   return NextResponse.json({ ok: true });
 }
