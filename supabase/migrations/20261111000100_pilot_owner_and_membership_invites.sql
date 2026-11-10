@@ -15,7 +15,23 @@ on conflict (singleton) do nothing;
 
 alter table public.pilot_owner_bootstrap_state enable row level security;
 revoke all on public.pilot_owner_bootstrap_state from public, anon, authenticated;
-grant select, insert, update on public.pilot_owner_bootstrap_state to service_role;
+revoke all on public.pilot_owner_bootstrap_state from service_role;
+
+create table public.tenant_membership_invites (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  normalized_email text not null check (normalized_email = lower(btrim(normalized_email)) and length(normalized_email) between 3 and 254),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role public.member_role not null check (role in ('manager','staff')),
+  invited_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  unique (tenant_id, normalized_email),
+  unique (tenant_id, user_id)
+);
+
+alter table public.tenant_membership_invites enable row level security;
+revoke all on public.tenant_membership_invites from public, anon, authenticated;
+grant select, insert, update, delete on public.tenant_membership_invites to service_role;
 
 create or replace function public.bootstrap_pilot_owner(
   target_tenant_id uuid,
