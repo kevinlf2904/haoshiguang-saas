@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { deriveTrackingToken, hashTrackingToken } from "../../src/lib/order-tracking-crypto.mjs";
+import { GET as getTrackingOrder } from "../../src/app/api/orders/[token]/route";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -281,6 +282,24 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
     expect(oldKeyResponse.status()).toBe(200);
     expect((await oldKeyResponse.json()).order.order_number).toBe(checkoutPayload.order!.order_number);
 
+    // Removing v1 from the configured key ring must invalidate a v1 bearer token.
+    const originalKeyRing = process.env.ORDER_TRACKING_HMAC_KEYS;
+    const originalActiveKeyVersion = process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+    try {
+      process.env.ORDER_TRACKING_HMAC_KEYS = JSON.stringify({ "2": newRotationSecret });
+      process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = "2";
+      const removedOldKeyResponse = await getTrackingOrder(
+        {} as never,
+        { params: Promise.resolve({ token: oldRotationToken }) },
+      );
+      expect(removedOldKeyResponse.status).toBe(404);
+    } finally {
+      if (originalKeyRing === undefined) delete process.env.ORDER_TRACKING_HMAC_KEYS;
+      else process.env.ORDER_TRACKING_HMAC_KEYS = originalKeyRing;
+      if (originalActiveKeyVersion === undefined) delete process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+      else process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = originalActiveKeyVersion;
+    }
+
     const { error: newKeySeedError } = await admin.from("public_order_tracking")
       .update({ token_hash: hashTrackingToken(newRotationToken, newRotationSecret), key_version: 2 })
       .eq("order_id", createdOrder!.id);
@@ -288,6 +307,25 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
     const newKeyResponse = await request.get("/api/orders/" + newRotationToken);
     expect(newKeyResponse.status()).toBe(200);
     expect((await newKeyResponse.json()).order.order_number).toBe(checkoutPayload.order!.order_number);
+
+    // Missing key-ring configuration must fail closed before any database lookup.
+    const savedKeys = process.env.ORDER_TRACKING_HMAC_KEYS;
+    const savedActiveVersion = process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+    try {
+      delete process.env.ORDER_TRACKING_HMAC_KEYS;
+      delete process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+      const missingKeyRingResponse = await getTrackingOrder(
+        {} as never,
+        { params: Promise.resolve({ token: newRotationToken }) },
+      );
+      expect(missingKeyRingResponse.status).toBe(503);
+      expect((await missingKeyRingResponse.json()).error).toContain("暫時無法使用");
+    } finally {
+      if (savedKeys === undefined) delete process.env.ORDER_TRACKING_HMAC_KEYS;
+      else process.env.ORDER_TRACKING_HMAC_KEYS = savedKeys;
+      if (savedActiveVersion === undefined) delete process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION;
+      else process.env.ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION = savedActiveVersion;
+    }
   } finally {
     const { error: restoreTrackingError } = await admin.from("public_order_tracking")
       .update({ token_hash: originalTracking!.token_hash, key_version: originalTracking!.key_version })
