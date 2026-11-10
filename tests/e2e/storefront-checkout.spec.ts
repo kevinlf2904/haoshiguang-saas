@@ -202,12 +202,17 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   expect(holidayResponse.status()).toBe(409);
   expect((await holidayResponse.json()).error).toContain("公休日");
 
-  // Remove the holiday and create a real order through the customer-facing browser flow.
+  // Remove the holiday and prepare a merchant tab before a new order is created.
   await page.goto("/merchant/settings");
   await page.locator(".closed-date-list span").filter({ hasText: today })
     .getByRole("button", { name: "移除" }).click();
   await page.getByRole("button", { name: "儲存營業設定" }).click();
   await expect(page.getByRole("status")).toContainText("營業設定已儲存");
+
+  const merchantPage = await page.context().newPage();
+  await merchantPage.goto("/merchant/orders");
+  await expect(merchantPage.getByRole("heading", { name: "訂單管理" })).toBeVisible();
+  await expect(merchantPage.getByText("每 15 秒自動更新")).toBeVisible();
 
   await page.goto("/store/laozhang");
   await expect(page.getByText("線上接單中 · 預計備餐 35 分鐘")).toBeVisible();
@@ -238,12 +243,6 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(page.getByText("海鮮湯麵 × 1")).toBeVisible();
   await expect(page.locator(".tracking-details")).toContainText("NT$180");
   const trackingUrl = page.url();
-
-  // Keep a second merchant tab open before checkout to verify background polling.
-  const merchantPage = await page.context().newPage();
-  await merchantPage.goto("/merchant/orders");
-  await expect(merchantPage.getByRole("heading", { name: "訂單管理" })).toBeVisible();
-  await expect(merchantPage.getByText("每 15 秒自動更新")).toBeVisible();
 
   // The same committed order appears in the already-open merchant tab without a manual refresh.
   await expect(merchantPage.getByText(customerName, { exact: true })).toBeVisible({ timeout: 20_000 });
