@@ -41,5 +41,7 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
+      - name: URL guard and trusted client-IP unit tests
+        run: npm run test:url
       - name: Isolated PostgreSQL RLS and checkout integration tests
         run: bash scripts/test-merchant-db.sh
