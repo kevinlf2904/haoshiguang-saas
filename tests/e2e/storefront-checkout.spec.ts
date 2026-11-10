@@ -218,12 +218,26 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await page.getByRole("button", { name: /送出訂單/ }).click();
   const checkoutResponse = await checkoutResponsePromise;
   expect(checkoutResponse.status()).toBe(201);
-  const checkoutPayload = await checkoutResponse.json() as { order?: { order_number?: number; total?: number; currency?: string } };
+  const checkoutPayload = await checkoutResponse.json() as { order?: { order_number?: number; total?: number; currency?: string; tracking_token?: string } };
   expect(checkoutPayload.order?.order_number).toBeTruthy();
   expect(checkoutPayload.order?.currency).toBe("TWD");
   expect(Number(checkoutPayload.order?.total)).toBe(180);
+  expect(checkoutPayload.order?.tracking_token).toMatch(/^[a-f0-9]{64}$/);
   await expect(page.getByText("訂單已建立")).toBeVisible();
   await expect(page.locator(".checkout-result span")).toHaveText("應付金額 NT$180");
+  await expect(page.getByRole("link", { name: /查看訂單進度/ })).toBeVisible();
+
+  const invalidTrackingResponse = await request.get("/api/orders/" + "a".repeat(64));
+  expect(invalidTrackingResponse.status()).toBe(404);
+  expect((await invalidTrackingResponse.json()).error).toContain("找不到訂單");
+
+  await page.getByRole("link", { name: /查看訂單進度/ }).click();
+  await expect(page).toHaveURL(/\/order\/[a-f0-9]{64}$/);
+  await expect(page.getByRole("heading", { name: "查看訂單進度" })).toBeVisible();
+  await expect(page.locator(".tracking-status strong")).toHaveText("等待店家確認");
+  await expect(page.getByText("海鮮湯麵 × 1")).toBeVisible();
+  await expect(page.locator(".tracking-details")).toContainText("NT$180");
+  const trackingUrl = page.url();
 
   // The same committed order is visible to the authenticated tenant and can be accepted.
   await page.goto("/merchant/orders");
@@ -231,4 +245,10 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await expect(page.getByText("海鮮湯麵 × 1")).toBeVisible();
   await page.getByRole("button", { name: "接受訂單" }).first().click();
   await expect(page.getByText("已接單").first()).toBeVisible();
+
+  // The bearer tracking URL reflects the merchant's accepted status without exposing PII.
+  await page.goto(trackingUrl);
+  await expect(page.locator(".tracking-status strong")).toHaveText("店家已接單");
+  await expect(page.getByText(customerName, { exact: true })).toHaveCount(0);
+  await expect(page.getByText("0912345678", { exact: true })).toHaveCount(0);
 });

@@ -110,6 +110,11 @@ export async function POST(request: NextRequest) {
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // Derive a stable bearer token from the UUID idempotency key so retries
+  // return the same tracking URL without storing the raw token in the database.
+  const trackingToken = await keyedHash(`tracking:${body.storeSlug}:${idempotencyKey}`, serviceRoleKey);
+  const trackingTokenHash = await keyedHash(`tracking-hash:${trackingToken}`, serviceRoleKey);
   const { data, error } = await supabase.rpc("create_public_order", {
     p_tenant_slug: body.storeSlug,
     p_customer_name: body.customerName.trim(),
@@ -136,5 +141,16 @@ export async function POST(request: NextRequest) {
     return json("訂單暫時無法建立，請稍後再試。", 500);
   }
 
-  return NextResponse.json({ order: data }, { status: 201 });
+  // If this write transiently fails, the same idempotency key can safely retry:
+  // the checkout RPC returns the original order and this upsert repairs the link.
+  const { error: trackingError } = await supabase
+    .from("public_order_tracking")
+    .upsert({ order_id: data.id, token_hash: trackingTokenHash }, { onConflict: "order_id" });
+  if (trackingError) {
+    return json("訂單已建立，但查詢連結尚未準備完成；請保留原頁面並重試。", 503);
+  }
+
+  return NextResponse.json({
+    order: { ...data, tracking_token: trackingToken },
+  }, { status: 201 });
 }
