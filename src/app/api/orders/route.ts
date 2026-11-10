@@ -144,16 +144,36 @@ export async function POST(request: NextRequest) {
     return json("訂單暫時無法建立，請稍後再試。", 500);
   }
 
-  // If this write transiently fails, the same idempotency key can safely retry:
-  // the checkout RPC returns the original order and this upsert repairs the link.
+  // Ignore duplicate order rows so a retry after key rotation preserves the
+  // original link's key version instead of silently invalidating that bearer URL.
   const { error: trackingError } = await supabase
     .from("public_order_tracking")
-    .upsert({ order_id: data.id, token_hash: trackingTokenHash, key_version: trackingKeyRing.activeVersion }, { onConflict: "order_id" });
+    .upsert(
+      { order_id: data.id, token_hash: trackingTokenHash, key_version: trackingKeyRing.activeVersion },
+      { onConflict: "order_id", ignoreDuplicates: true },
+    );
   if (trackingError) {
     return json("訂單已建立，但查詢連結尚未準備完成；請保留原頁面並重試。", 503);
   }
 
+  const { data: trackingRecord, error: trackingReadError } = await supabase
+    .from("public_order_tracking")
+    .select("token_hash,key_version")
+    .eq("order_id", data.id)
+    .maybeSingle();
+  if (trackingReadError || !trackingRecord) {
+    return json("訂單已建立，但查詢連結尚未準備完成；請保留原頁面並重試。", 503);
+  }
+  const issuedSecret = trackingKeyRing.keys.get(trackingRecord.key_version);
+  if (!issuedSecret) {
+    return json("訂單查詢金鑰尚未完成設定，請稍後再試。", 503);
+  }
+  const issuedToken = deriveTrackingToken(body.storeSlug, idempotencyKey, issuedSecret);
+  if (hashTrackingToken(issuedToken, issuedSecret) !== trackingRecord.token_hash) {
+    return json("訂單查詢連結驗證失敗，請聯絡店家確認。", 503);
+  }
+
   return NextResponse.json({
-    order: { ...data, tracking_token: trackingToken },
+    order: { ...data, tracking_token: issuedToken },
   }, { status: 201 });
 }
