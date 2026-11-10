@@ -90,3 +90,46 @@ grant execute on function public.bootstrap_pilot_owner(uuid, uuid) to service_ro
 
 comment on function public.bootstrap_pilot_owner(uuid, uuid) is
   'One-time service-role-only assignment of the first owner to the configured Pilot tenant. The caller must independently validate a high-entropy bootstrap secret.';
+
+create or replace function public.remove_tenant_member(
+  target_tenant_id uuid,
+  target_membership_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid;
+  v_role public.member_role;
+begin
+  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+    raise exception 'service_role_required' using errcode = '42501';
+  end if;
+
+  select user_id, role into v_user_id, v_role
+  from public.memberships
+  where id = target_membership_id and tenant_id = target_tenant_id
+  for update;
+
+  if not found then
+    raise exception 'tenant_membership_not_found' using errcode = 'P0002';
+  end if;
+  if v_role = 'owner' then
+    raise exception 'owner_membership_transfer_required' using errcode = '55000';
+  end if;
+
+  delete from public.tenant_membership_invites
+  where tenant_id = target_tenant_id and user_id = v_user_id;
+
+  delete from public.memberships
+  where id = target_membership_id and tenant_id = target_tenant_id;
+end;
+$$;
+
+revoke all on function public.remove_tenant_member(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.remove_tenant_member(uuid,uuid) to service_role;
+
+comment on function public.remove_tenant_member(uuid,uuid) is
+  'Atomically removes a non-owner tenant membership and its invitation idempotency record. Authorization of the acting owner/manager is enforced by the server route.';
