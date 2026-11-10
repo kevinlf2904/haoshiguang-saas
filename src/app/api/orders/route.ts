@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getTrustedVercelClientIp } from "../../../lib/trusted-client-ip.mjs";
+import { normalizePhoneNumber } from "../../../lib/phone-normalization.mjs";
 import { deriveTrackingToken, hashTrackingToken, loadTrackingKeyRing } from "../../../lib/order-tracking-crypto.mjs";
 
 export const runtime = "nodejs";
@@ -48,7 +49,11 @@ export async function POST(request: NextRequest) {
   if (typeof body.customerName !== "string" || body.customerName.trim().length < 1 || body.customerName.trim().length > 60) {
     return json("請填寫正確的稱呼。", 400);
   }
-  if (typeof body.customerPhone !== "string" || body.customerPhone.replace(/\\D/g, "").length < 8 || body.customerPhone.replace(/\\D/g, "").length > 15) {
+  if (typeof body.customerPhone !== "string") {
+    return json("請填寫正確的聯絡電話。", 400);
+  }
+  const normalizedPhone = normalizePhoneNumber(body.customerPhone);
+  if (normalizedPhone.length < 8 || normalizedPhone.length > 15) {
     return json("請填寫正確的聯絡電話。", 400);
   }
   if (body.fulfillment !== "takeaway" && body.fulfillment !== "dine_in") {
@@ -89,7 +94,7 @@ export async function POST(request: NextRequest) {
   const requestFingerprint = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({
     storeSlug: body.storeSlug,
     customerName: body.customerName.trim(),
-    customerPhone: body.customerPhone.replace(/\\D/g, ""),
+    customerPhone: normalizedPhone,
     fulfillment: body.fulfillment,
     tableLabel: body.fulfillment === "dine_in" ? body.tableLabel?.trim() || "" : "",
     note: body.note?.trim() || "",
@@ -103,7 +108,6 @@ export async function POST(request: NextRequest) {
     return json("訂單服務尚未設定，請稍後再試。", 503);
   }
 
-  const normalizedPhone = body.customerPhone.replace(/\\D/g, "");
   const [ipHash, phoneHash] = await Promise.all([
     keyedHash(`ip:${clientIp}`, serviceRoleKey),
     keyedHash(`phone:${normalizedPhone}`, serviceRoleKey),
@@ -121,7 +125,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase.rpc("create_public_order", {
     p_tenant_slug: body.storeSlug,
     p_customer_name: body.customerName.trim(),
-    p_customer_phone: body.customerPhone,
+    p_customer_phone: normalizedPhone,
     p_fulfillment: body.fulfillment,
     p_table_label: body.fulfillment === "dine_in" ? body.tableLabel!.trim() : null,
     p_note: body.note?.trim() || "",
