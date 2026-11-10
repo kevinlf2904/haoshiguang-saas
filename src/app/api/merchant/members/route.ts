@@ -22,6 +22,10 @@ async function roleFor(supabase: NonNullable<Awaited<ReturnType<typeof context>>
   return { role: data?.role || null, error: false };
 }
 
+function adminClient() {
+  try { return createSupabaseAdminClient(); } catch { return null; }
+}
+
 export async function GET(request: NextRequest) {
   const { supabase, userId, response } = await context();
   if (response) return response;
@@ -33,7 +37,8 @@ export async function GET(request: NextRequest) {
   if (actor.error) return fail("無法驗證店家權限。", 503);
   if (actor.role !== "owner" && actor.role !== "manager") return fail("只有負責人或管理者可以查看會員。", 403);
 
-  const admin = createSupabaseAdminClient();
+  const admin = adminClient();
+  if (!admin) return fail("會員管理服務尚未設定完成。", 503);
   const { data: memberships, error } = await admin.from("memberships")
     .select("id,user_id,role,created_at").eq("tenant_id", tenantId).order("created_at", { ascending: true });
   if (error) return fail("無法讀取店家會員。", 503);
@@ -64,17 +69,53 @@ export async function POST(request: NextRequest) {
   if (actor.role !== "owner" && actor.role !== "manager") return fail("只有負責人或管理者可以邀請會員。", 403);
   if (actor.role === "manager" && body.role !== "staff") return fail("管理者只能邀請員工，不能授予管理者權限。", 403);
 
-  const admin = createSupabaseAdminClient();
+  const admin = adminClient();
+  if (!admin) return fail("會員管理服務尚未設定完成。", 503);
   const email = body.email.trim().toLowerCase();
+  const role = body.role as "manager" | "staff";
+
+  // A completed or partially completed prior request is safe to retry. The
+  // invite record is written before membership so a retry can finish the grant.
+  const { data: existingInvite, error: inviteLookupError } = await admin.from("tenant_membership_invites")
+    .select("user_id,role").eq("tenant_id", body.tenantId).eq("normalized_email", email).maybeSingle();
+  if (inviteLookupError) return fail("無法確認既有邀請狀態。", 503);
+  if (existingInvite) {
+    if (existingInvite.role !== role) return fail("此電子郵件已有不同角色的邀請，請先撤銷會員權限再重新邀請。", 409);
+    const { data: existingMembership, error: membershipLookupError } = await admin.from("memberships")
+      .select("id,role").eq("tenant_id", body.tenantId).eq("user_id", existingInvite.user_id).maybeSingle();
+    if (membershipLookupError) return fail("無法確認會員狀態。", 503);
+    if (existingMembership && existingMembership.role !== role) return fail("會員目前角色與邀請紀錄不一致，請聯絡系統管理員。", 409);
+    if (!existingMembership) {
+      const { error: retryGrantError } = await admin.from("memberships").insert({
+        tenant_id: body.tenantId, user_id: existingInvite.user_id, role,
+      });
+      if (retryGrantError) return fail("重試會員權限建立失敗。", 503);
+    }
+    return NextResponse.json({ ok: true, message: "此會員邀請已存在，權限已確認。" }, {
+      status: 202, headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
   if (inviteError || !invited.user) return fail("邀請失敗；此電子郵件可能已註冊或已有待處理邀請。", 409);
 
+  const { error: inviteRecordError } = await admin.from("tenant_membership_invites").insert({
+    tenant_id: body.tenantId, normalized_email: email, user_id: invited.user.id,
+    role, invited_by: userId,
+  });
+  if (inviteRecordError) {
+    await admin.auth.admin.deleteUser(invited.user.id);
+    return fail("邀請紀錄建立失敗，已回復本次建立的 Auth 帳號。", 409);
+  }
+
   const { error: membershipError } = await admin.from("memberships").insert({
-    tenant_id: body.tenantId, user_id: invited.user.id, role: body.role,
+    tenant_id: body.tenantId, user_id: invited.user.id, role,
   });
   if (membershipError) {
+    await admin.from("tenant_membership_invites").delete()
+      .eq("tenant_id", body.tenantId).eq("normalized_email", email);
     await admin.auth.admin.deleteUser(invited.user.id);
-    return fail("會員權限建立失敗，已回復本次建立的 Auth 帳號；請確認是否已有會員或邀請。", 409);
+    return fail("會員權限建立失敗，已回復本次建立的邀請與 Auth 帳號。", 409);
   }
 
   return NextResponse.json({ ok: true, message: "已寄出會員邀請。" }, {
@@ -100,7 +141,8 @@ export async function DELETE(request: NextRequest) {
   if (actor.error) return fail("無法驗證店家權限。", 503);
   if (actor.role !== "owner" && actor.role !== "manager") return fail("只有負責人或管理者可以移除會員。", 403);
 
-  const admin = createSupabaseAdminClient();
+  const admin = adminClient();
+  if (!admin) return fail("會員管理服務尚未設定完成。", 503);
   const { data: target, error: readError } = await admin.from("memberships")
     .select("id,user_id,role").eq("id", body.membershipId).eq("tenant_id", body.tenantId).maybeSingle();
   if (readError) return fail("無法讀取會員資料。", 503);
@@ -111,5 +153,8 @@ export async function DELETE(request: NextRequest) {
   const { error: deleteError } = await admin.from("memberships").delete()
     .eq("id", target.id).eq("tenant_id", body.tenantId);
   if (deleteError) return fail("移除會員失敗。", 503);
+  const { error: inviteDeleteError } = await admin.from("tenant_membership_invites").delete()
+    .eq("tenant_id", body.tenantId).eq("user_id", target.user_id);
+  if (inviteDeleteError) return fail("會員已移除，但清理邀請紀錄失敗；請稍後重試。", 503);
   return NextResponse.json({ ok: true });
 }
