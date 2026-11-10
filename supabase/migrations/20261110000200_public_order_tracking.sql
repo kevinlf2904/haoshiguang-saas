@@ -4,6 +4,7 @@ create table public.public_order_tracking (
   order_id uuid primary key references public.orders(id) on delete cascade,
   token_hash text not null unique
     check (length(token_hash) = 64 and token_hash ~ '^[a-f0-9]{64}$'),
+  key_version integer not null default 1 check (key_version > 0),
   created_at timestamptz not null default now()
 );
 
