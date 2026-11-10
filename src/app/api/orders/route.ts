@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getTrustedVercelClientIp } from "../../../lib/trusted-client-ip.mjs";
+import { deriveTrackingToken, hashTrackingToken, loadTrackingKeyRing } from "../../../lib/order-tracking-crypto.mjs";
 
 export const runtime = "nodejs";
 
@@ -97,7 +98,8 @@ export async function POST(request: NextRequest) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) {
+  const trackingKeyRing = loadTrackingKeyRing();
+  if (!supabaseUrl || !serviceRoleKey || !trackingKeyRing) {
     return json("訂單服務尚未設定，請稍後再試。", 503);
   }
 
@@ -113,8 +115,9 @@ export async function POST(request: NextRequest) {
 
   // Derive a stable bearer token from the UUID idempotency key so retries
   // return the same tracking URL without storing the raw token in the database.
-  const trackingToken = await keyedHash(`tracking:${body.storeSlug}:${idempotencyKey}`, serviceRoleKey);
-  const trackingTokenHash = await keyedHash(`tracking-hash:${trackingToken}`, serviceRoleKey);
+  const activeTrackingSecret = trackingKeyRing.keys.get(trackingKeyRing.activeVersion)!;
+  const trackingToken = deriveTrackingToken(body.storeSlug, idempotencyKey, activeTrackingSecret);
+  const trackingTokenHash = hashTrackingToken(trackingToken, activeTrackingSecret);
   const { data, error } = await supabase.rpc("create_public_order", {
     p_tenant_slug: body.storeSlug,
     p_customer_name: body.customerName.trim(),
@@ -145,7 +148,7 @@ export async function POST(request: NextRequest) {
   // the checkout RPC returns the original order and this upsert repairs the link.
   const { error: trackingError } = await supabase
     .from("public_order_tracking")
-    .upsert({ order_id: data.id, token_hash: trackingTokenHash }, { onConflict: "order_id" });
+    .upsert({ order_id: data.id, token_hash: trackingTokenHash, key_version: trackingKeyRing.activeVersion }, { onConflict: "order_id" });
   if (trackingError) {
     return json("訂單已建立，但查詢連結尚未準備完成；請保留原頁面並重試。", 503);
   }
