@@ -23,14 +23,25 @@ test("店家負責人可更新店名、電話與地址，顧客點餐頁同步�
 
   await page.goto("/merchant/profile");
   await expect(page.getByRole("heading", { name: "店家資料" })).toBeVisible();
-  const name = page.locator(".profile-card input").nth(0);
-  const phone = page.locator(".profile-card input").nth(1);
-  const address = page.locator(".profile-card textarea");
+  const name = page.getByLabel("店家名稱");
+  const phone = page.getByLabel("聯絡電話");
+  const address = page.getByLabel("店家地址");
   await expect(name).toHaveValue(tenant!.name);
   await name.fill("老張麵店（測試）");
   await phone.fill("02-2345-6789");
   await address.fill("台北市信義區測試路 1 號");
+  await expect(name).toHaveValue("老張麵店（測試）");
+  await expect(phone).toHaveValue("02-2345-6789");
+  await expect(address).toHaveValue("台北市信義區測試路 1 號");
+  const saveResponsePromise = page.waitForResponse(response =>
+    response.url().endsWith("/api/merchant/profile") && response.request().method() === "PUT",
+  );
   await page.getByRole("button", { name: "儲存店家資料" }).click();
+  const saveResponse = await saveResponsePromise;
+  const savePayload = await saveResponse.json();
+  console.log("MERCHANT_PROFILE_SAVE_DIAGNOSTIC", JSON.stringify({ status: saveResponse.status(), profile: savePayload.profile, error: savePayload.error }));
+  expect(saveResponse.ok()).toBeTruthy();
+  expect(savePayload.profile).toMatchObject({ name: "老張麵店（測試）", phone: "02-2345-6789", address: "台北市信義區測試路 1 號" });
   await expect(page.getByRole("status")).toContainText("店家資料已儲存");
 
   const { data: publicProfile, error: publicError } = await admin.from("tenants")
