@@ -33,7 +33,7 @@ export default function MerchantProfilePage() {
       if (!membershipResponse.ok) throw new Error(membershipResult.error || "無法讀取店家權限。");
       const items = membershipResult.memberships || [];
       setMemberships(items);
-      const selected = selectedTenantId || tenantId || items[0]?.tenant_id || "";
+      const selected = selectedTenantId || items[0]?.tenant_id || "";
       if (!selected) { setProfile(null); setTenantId(""); return; }
       setTenantId(selected);
       const response = await fetch("/api/merchant/profile?tenantId=" + encodeURIComponent(selected), { cache: "no-store" });
@@ -47,7 +47,7 @@ export default function MerchantProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [router, tenantId]);
+  }, [router]);
 
   useEffect(() => { void load(); }, [load]);
 

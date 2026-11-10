@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getTrustedVercelClientIp } from "../../../lib/trusted-client-ip.mjs";
+import { normalizePhoneNumber } from "../../../lib/phone-normalization.mjs";
+import { deriveTrackingToken, hashTrackingToken, loadTrackingKeyRing } from "../../../lib/order-tracking-crypto.mjs";
 
 export const runtime = "nodejs";
 
@@ -47,7 +49,11 @@ export async function POST(request: NextRequest) {
   if (typeof body.customerName !== "string" || body.customerName.trim().length < 1 || body.customerName.trim().length > 60) {
     return json("請填寫正確的稱呼。", 400);
   }
-  if (typeof body.customerPhone !== "string" || body.customerPhone.replace(/\\D/g, "").length < 8 || body.customerPhone.replace(/\\D/g, "").length > 15) {
+  if (typeof body.customerPhone !== "string") {
+    return json("請填寫正確的聯絡電話。", 400);
+  }
+  const normalizedPhone = normalizePhoneNumber(body.customerPhone);
+  if (normalizedPhone.length < 8 || normalizedPhone.length > 15) {
     return json("請填寫正確的聯絡電話。", 400);
   }
   if (body.fulfillment !== "takeaway" && body.fulfillment !== "dine_in") {
@@ -88,7 +94,7 @@ export async function POST(request: NextRequest) {
   const requestFingerprint = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({
     storeSlug: body.storeSlug,
     customerName: body.customerName.trim(),
-    customerPhone: body.customerPhone.replace(/\\D/g, ""),
+    customerPhone: normalizedPhone,
     fulfillment: body.fulfillment,
     tableLabel: body.fulfillment === "dine_in" ? body.tableLabel?.trim() || "" : "",
     note: body.note?.trim() || "",
@@ -97,11 +103,11 @@ export async function POST(request: NextRequest) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) {
+  const trackingKeyRing = loadTrackingKeyRing();
+  if (!supabaseUrl || !serviceRoleKey || !trackingKeyRing) {
     return json("訂單服務尚未設定，請稍後再試。", 503);
   }
 
-  const normalizedPhone = body.customerPhone.replace(/\\D/g, "");
   const [ipHash, phoneHash] = await Promise.all([
     keyedHash(`ip:${clientIp}`, serviceRoleKey),
     keyedHash(`phone:${normalizedPhone}`, serviceRoleKey),
@@ -113,12 +119,13 @@ export async function POST(request: NextRequest) {
 
   // Derive a stable bearer token from the UUID idempotency key so retries
   // return the same tracking URL without storing the raw token in the database.
-  const trackingToken = await keyedHash(`tracking:${body.storeSlug}:${idempotencyKey}`, serviceRoleKey);
-  const trackingTokenHash = await keyedHash(`tracking-hash:${trackingToken}`, serviceRoleKey);
+  const activeTrackingSecret = trackingKeyRing.keys.get(trackingKeyRing.activeVersion)!;
+  const trackingToken = deriveTrackingToken(body.storeSlug, idempotencyKey, activeTrackingSecret);
+  const trackingTokenHash = hashTrackingToken(trackingToken, activeTrackingSecret);
   const { data, error } = await supabase.rpc("create_public_order", {
     p_tenant_slug: body.storeSlug,
     p_customer_name: body.customerName.trim(),
-    p_customer_phone: body.customerPhone,
+    p_customer_phone: normalizedPhone,
     p_fulfillment: body.fulfillment,
     p_table_label: body.fulfillment === "dine_in" ? body.tableLabel!.trim() : null,
     p_note: body.note?.trim() || "",
@@ -141,16 +148,36 @@ export async function POST(request: NextRequest) {
     return json("訂單暫時無法建立，請稍後再試。", 500);
   }
 
-  // If this write transiently fails, the same idempotency key can safely retry:
-  // the checkout RPC returns the original order and this upsert repairs the link.
+  // Ignore duplicate order rows so a retry after key rotation preserves the
+  // original link's key version instead of silently invalidating that bearer URL.
   const { error: trackingError } = await supabase
     .from("public_order_tracking")
-    .upsert({ order_id: data.id, token_hash: trackingTokenHash }, { onConflict: "order_id" });
+    .upsert(
+      { order_id: data.id, token_hash: trackingTokenHash, key_version: trackingKeyRing.activeVersion },
+      { onConflict: "order_id", ignoreDuplicates: true },
+    );
   if (trackingError) {
     return json("訂單已建立，但查詢連結尚未準備完成；請保留原頁面並重試。", 503);
   }
 
+  const { data: trackingRecord, error: trackingReadError } = await supabase
+    .from("public_order_tracking")
+    .select("token_hash,key_version")
+    .eq("order_id", data.id)
+    .maybeSingle();
+  if (trackingReadError || !trackingRecord) {
+    return json("訂單已建立，但查詢連結尚未準備完成；請保留原頁面並重試。", 503);
+  }
+  const issuedSecret = trackingKeyRing.keys.get(trackingRecord.key_version);
+  if (!issuedSecret) {
+    return json("訂單查詢金鑰尚未完成設定，請稍後再試。", 503);
+  }
+  const issuedToken = deriveTrackingToken(body.storeSlug, idempotencyKey, issuedSecret);
+  if (hashTrackingToken(issuedToken, issuedSecret) !== trackingRecord.token_hash) {
+    return json("訂單查詢連結驗證失敗，請聯絡店家確認。", 503);
+  }
+
   return NextResponse.json({
-    order: { ...data, tracking_token: trackingToken },
+    order: { ...data, tracking_token: issuedToken },
   }, { status: 201 });
 }

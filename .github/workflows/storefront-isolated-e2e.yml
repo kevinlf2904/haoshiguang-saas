@@ -11,6 +11,7 @@ on:
       - feat/merchant-store-profile
       - feat/customer-order-tracking
       - feat/merchant-order-alerts
+      - feat/order-alerts-hmac-integration
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
@@ -97,6 +98,9 @@ jobs:
             "NEXT_PUBLIC_SUPABASE_URL=" + values.API_URL,
             "NEXT_PUBLIC_SUPABASE_ANON_KEY=" + values.ANON_KEY,
             "SUPABASE_SERVICE_ROLE_KEY=" + values.SERVICE_ROLE_KEY,
+            // Disposable test-only key material; never used outside this CI job.
+            "ORDER_TRACKING_HMAC_KEYS=" + JSON.stringify({ "1": "ci-order-tracking-key-material-at-least-32-bytes", "2": "ci-order-tracking-key-material-version-two-32-bytes" }),
+            "ORDER_TRACKING_HMAC_ACTIVE_KEY_VERSION=2",
             "DB_URL=" + values.DB_URL,
           ].join("\n") + "\n";
           fs.appendFileSync(process.env.GITHUB_ENV, env);
