@@ -155,6 +155,28 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   });
   expect(malformedTrustedIpResponse.status()).toBe(400);
   expect((await malformedTrustedIpResponse.json()).error).toContain("連線來源");
+
+  // Optional text fields must reject malformed JSON types rather than throw 500.
+  const invalidNoteResponse = await request.post("/api/orders", {
+    data: { ...checkoutBody, note: 123 },
+    headers: {
+      "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5",
+      "x-vercel-forwarded-for": "203.0.113.10",
+    },
+  });
+  expect(invalidNoteResponse.status()).toBe(400);
+  expect((await invalidNoteResponse.json()).error).toContain("備註格式");
+
+  const invalidTableLabelResponse = await request.post("/api/orders", {
+    data: { ...checkoutBody, tableLabel: 123 },
+    headers: {
+      "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6",
+      "x-vercel-forwarded-for": "203.0.113.10",
+    },
+  });
+  expect(invalidTableLabelResponse.status()).toBe(400);
+  expect((await invalidTableLabelResponse.json()).error).toContain("桌號格式");
+
   const pausedResponse = await request.post("/api/orders", { data: checkoutBody, headers: {
     "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
     "x-vercel-forwarded-for": "203.0.113.10",
