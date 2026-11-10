@@ -1,3 +1,4 @@
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 // Server-only module. Never import from Client Components or expose this client.
