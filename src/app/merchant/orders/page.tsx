@@ -79,7 +79,7 @@ export default function MerchantOrdersPage() {
             if ("Notification" in window && Notification.permission === "granted") {
               for (const order of arrivals) {
                 new Notification("好食光｜收到新訂單", {
-                  body: `訂單 #${order.order_number} · ${order.customer_name} · NT${Number(order.total).toLocaleString("zh-TW")}`,
+                  body: `訂單 #${order.order_number} · NT${Number(order.total).toLocaleString("zh-TW")}`,
                   tag: `haoshiguang-order-${order.id}`,
                 });
               }
@@ -111,6 +111,10 @@ export default function MerchantOrdersPage() {
   async function enableAlerts() {
     alertsEnabledRef.current = true;
     setAlertsEnabled(true);
+    // Start the permission request directly in the click gesture before awaiting audio.
+    const permissionRequest = "Notification" in window && Notification.permission === "default"
+      ? Notification.requestPermission()
+      : Promise.resolve("Notification" in window ? Notification.permission : "unsupported");
     try {
       const AudioContextConstructor = window.AudioContext;
       if (AudioContextConstructor && !audioContext.current) {
@@ -120,9 +124,7 @@ export default function MerchantOrdersPage() {
     } catch {
       // Browser notification can still work if audio is unavailable.
     }
-    if ("Notification" in window && Notification.permission === "default") {
-      try { await Notification.requestPermission(); } catch { /* Permission is optional. */ }
-    }
+    try { await permissionRequest; } catch { /* Permission is optional. */ }
   }
 
   function disableAlerts() {
