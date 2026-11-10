@@ -103,7 +103,7 @@ export default function StorefrontPage() {
   const isOpenNow = useMemo(() => {
     if (!storeSettings) return false;
     if (!storeSettings.is_accepting_orders) return false;
-    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(clockNow));
     const get = (type: string) => parts.find(part => part.type === type)?.value || "";
     const date = get("year") + "-" + get("month") + "-" + get("day");
     if (storeSettings.closed_dates.includes(date)) return false;
