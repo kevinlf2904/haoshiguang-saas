@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
     "test:db": "bash scripts/test-db.sh",
     "test:url": "node --test scripts/tests/*.test.mjs"
   },
