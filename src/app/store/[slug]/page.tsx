@@ -169,7 +169,10 @@ export default function StorefrontPage() {
       if (!Number.isFinite(confirmedTotal) || confirmedTotal < 0) {
         throw new Error("訂單已送出，但金額資料異常，請聯絡店家確認。");
       }
-      if (typeof result.order.tracking_token !== "string" || !/^[a-f0-9]{64}$/.test(result.order.tracking_token)) {\n        throw new Error("訂單已送出，但查詢連結資料異常，請聯絡店家確認。");\n      }\n      setConfirmedOrder({ ...result.order, total: confirmedTotal });
+      if (typeof result.order.tracking_token !== "string" || !/^[a-f0-9]{64}$/.test(result.order.tracking_token)) {
+        throw new Error("訂單已送出，但查詢連結資料異常，請聯絡店家確認。");
+      }
+      setConfirmedOrder({ ...result.order, total: confirmedTotal });
       setCart([]);
       setIdempotencyKey("");
       window.sessionStorage.removeItem("haoshiguang_checkout_idempotency:" + params.slug);
