@@ -28,7 +28,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let access = null;
+  let access: { order_id: string; key_version: number } | null = null;
   for (const [keyVersion, trackingSecret] of trackingKeyRing.keys) {
     const tokenHash = hashTrackingToken(token, trackingSecret);
     const { data, error } = await supabase
