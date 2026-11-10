@@ -217,8 +217,12 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await merchantPage.addInitScript(() => {
     Object.defineProperty(window, "AudioContext", { value: undefined, configurable: true });
     (window as Window & { __notificationConstructorCalls?: number }).__notificationConstructorCalls = 0;
+    let permissionReads = 0;
     class FailingNotification {
-      static get permission() { return "default"; }
+      static get permission() {
+        permissionReads += 1;
+        return permissionReads === 1 ? "default" : "granted";
+      }
       static requestPermission() { return Promise.reject("permission unavailable"); }
       constructor() {
         const target = window as Window & { __notificationConstructorCalls?: number };
