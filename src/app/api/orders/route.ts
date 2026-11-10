@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getTrustedVercelClientIp } from "../../../lib/trusted-client-ip.mjs";
 
 export const runtime = "nodejs";
 
@@ -74,10 +75,8 @@ export async function POST(request: NextRequest) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) {
     return json("訂單識別碼無效，請重新送出。", 400);
   }
-  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "";
-  const vercelForwardedFor = request.headers.get("x-vercel-forwarded-for")?.split(",").at(-1)?.trim() || "";
-  const clientIp = vercelForwardedFor || forwardedFor;
-  if (!clientIp || clientIp.length > 128) return json("無法確認連線來源，請稍後再試。", 400);
+  const clientIp = getTrustedVercelClientIp(request.headers);
+  if (!clientIp) return json("無法確認連線來源，請稍後再試。", 400);
 
   const requestFingerprint = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({
     storeSlug: body.storeSlug,
