@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies (bootstrap without lockfile)
         if: hashFiles('package-lock.json') == ''
         run: npm install --ignore-scripts
+      - name: Audit locked dependencies
+        if: hashFiles('package-lock.json') != ''
+        run: npm audit --audit-level=high
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
