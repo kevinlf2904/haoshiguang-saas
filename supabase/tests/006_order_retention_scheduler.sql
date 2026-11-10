@@ -23,6 +23,9 @@ begin
   if coalesce((v_summary ->> 'tenants_processed')::integer, 0) < 1 then
     raise exception 'scheduled_cleanup_did_not_process_tenants';
   end if;
+  if coalesce((v_summary ->> 'tenants_failed')::integer, 0) <> 0 then
+    raise exception 'scheduled_cleanup_reported_tenant_failures';
+  end if;
   if exists (
     select 1 from public.public_order_ip_limits
     where tenant_id = v_tenant and ip_hash = repeat('9', 64)
