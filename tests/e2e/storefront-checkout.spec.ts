@@ -234,9 +234,9 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
   await page.getByRole("link", { name: /查看訂單進度/ }).click();
   await expect(page).toHaveURL(/\/order\/[a-f0-9]{64}$/);
   await expect(page.getByRole("heading", { name: "查看訂單進度" })).toBeVisible();
-  await expect(page.getByText("等待店家確認")).toBeVisible();
+  await expect(page.locator(".tracking-status strong")).toHaveText("等待店家確認");
   await expect(page.getByText("海鮮湯麵 × 1")).toBeVisible();
-  await expect(page.getByText("NT$180", { exact: true })).toBeVisible();
+  await expect(page.locator(".tracking-details")).toContainText("NT$180");
   const trackingUrl = page.url();
 
   // The same committed order is visible to the authenticated tenant and can be accepted.
@@ -248,7 +248,7 @@ test("顧客菜單 → 店家營業設定 → 資料庫拒單 → 真實建立�
 
   // The bearer tracking URL reflects the merchant's accepted status without exposing PII.
   await page.goto(trackingUrl);
-  await expect(page.getByText("店家已接單")).toBeVisible();
+  await expect(page.locator(".tracking-status strong")).toHaveText("店家已接單");
   await expect(page.getByText(customerName, { exact: true })).toHaveCount(0);
   await expect(page.getByText("0912345678", { exact: true })).toHaveCount(0);
 });
