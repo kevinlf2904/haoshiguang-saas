@@ -3,7 +3,7 @@ name: Merchant business settings validation
 on:
   push:
     branches:
-      - feat/customer-order-tracking
+      - main
   pull_request:
     branches:
       - feat/merchant-product-management
@@ -11,6 +11,7 @@ on:
       - main
       - feat/merchant-store-profile
       - feat/customer-order-tracking
+      - feat/merchant-order-alerts
 
 permissions:
   contents: read

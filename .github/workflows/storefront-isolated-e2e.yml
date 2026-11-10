@@ -3,13 +3,14 @@ name: Isolated Supabase storefront E2E
 on:
   push:
     branches:
-      - feat/customer-order-tracking
+      - main
   pull_request:
     branches:
       - feat/merchant-product-management
       - main
       - feat/merchant-store-profile
       - feat/customer-order-tracking
+      - feat/merchant-order-alerts
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
