@@ -84,6 +84,10 @@ export async function POST(request: NextRequest) {
     target_reservation_id: claimId,
   });
   if (reserveError) {
+    console.error("PILOT_BOOTSTRAP_RESERVATION_FAILED", {
+      code: reserveError.code,
+      message: reserveError.message,
+    });
     return fail("初始化已完成、已由其他電子郵件保留，或店家狀態不符合初始化條件。", 409);
   }
 
