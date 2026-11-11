@@ -15,7 +15,7 @@ on conflict (singleton) do nothing;
 
 -- Membership writes must go through the audited service-role RPCs below.
 -- The application server only needs SELECT; no API route performs direct DML.
-revoke insert, update, delete on public.memberships from public, anon, authenticated, service_role;
+revoke insert, update, delete on public.memberships from public, anon, authenticated;
 
 alter table public.pilot_owner_bootstrap_state enable row level security;
 revoke all on public.pilot_owner_bootstrap_state from public, anon, authenticated, service_role;
