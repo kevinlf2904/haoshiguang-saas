@@ -12,6 +12,7 @@ on:
       - feat/customer-order-tracking
       - feat/merchant-order-alerts
       - feat/order-alerts-hmac-integration
+      - feat/pilot-owner-and-member-invites
 
 concurrency:
   group: haoshiguang-storefront-e2e-${{ github.ref }}
@@ -108,6 +109,16 @@ jobs:
 
       - name: Seed pilot catalog into disposable Supabase
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
+
+      - name: Configure isolated Pilot bootstrap HTTP/Auth integration
+        shell: bash
+        run: |
+          PILOT_TENANT_ID="$(psql "$DB_URL" -Atqc "select id from public.tenants where slug = 'laozhang'")"
+          test -n "$PILOT_TENANT_ID"
+          {
+            echo "PILOT_OWNER_BOOTSTRAP_TENANT_ID=$PILOT_TENANT_ID"
+            echo "PILOT_OWNER_BOOTSTRAP_SECRET=ci-only-bootstrap-secret-material-2026-11-11-32-bytes-minimum"
+          } >> "$GITHUB_ENV"
 
       - name: Verify scheduled retention SQL permissions and cleanup
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/006_order_retention_scheduler.sql
