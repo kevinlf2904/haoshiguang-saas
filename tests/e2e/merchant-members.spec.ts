@@ -152,11 +152,12 @@ test("會員 API/Auth 整合：權限邊界、邀請重試恢復、租戶隔離�
       expect(staffInviteRow?.role).toBe("staff");
       if (staffInviteRow?.user_id) createdUserIds.push(staffInviteRow.user_id);
 
+      const { data: managerMembership } = await admin.from("memberships").select("id")
+        .eq("tenant_id", tenantId).eq("user_id", managerCreated.user!.id).single();
       const managerRemoveManager = await memberApi(managerPage, "DELETE", "/api/merchant/members", {
-        tenantId, membershipId: managerCreated.user!.id,
+        tenantId, membershipId: managerMembership!.id,
       });
-      // A user ID is not a membership ID; the route must reject unknown IDs without crossing tenants.
-      expect([400, 404]).toContain(managerRemoveManager.status);
+      expect(managerRemoveManager.status).toBe(403);
 
       const { data: ownerMembership } = await admin.from("memberships").select("id")
         .eq("tenant_id", tenantId).eq("user_id", (await admin.auth.admin.listUsers({ page: 1, perPage: 1000 }))
