@@ -39,9 +39,9 @@ async function findReservedAuthUser(
     const users = data.users ?? [];
     const match = users.find((user) => user.email?.toLowerCase() === email);
     if (match) {
-      return match.user_metadata?.[RESERVATION_METADATA_KEY] === expectedReservationId
-        ? match
-        : null;
+      const reservationMarker = match.app_metadata?.[RESERVATION_METADATA_KEY]
+        ?? match.user_metadata?.[RESERVATION_METADATA_KEY];
+      return reservationMarker === expectedReservationId ? match : null;
     }
     if (users.length < 1000) return null;
   }
@@ -104,6 +104,19 @@ export async function POST(request: NextRequest) {
       return fail("邀請結果尚未確認；請稍後以相同電子郵件重試，系統會先核對邀請狀態。", 503);
     }
     authUser = invited.user;
+  }
+
+  // Persist the recovery marker in server-controlled metadata. Keep the
+  // invite-time user_metadata marker only as a fallback for a lost response
+  // before this server-side metadata update has completed.
+  const { error: markerError } = await admin.auth.admin.updateUserById(authUser.id, {
+    app_metadata: {
+      ...(authUser.app_metadata || {}),
+      [RESERVATION_METADATA_KEY]: claimId,
+    },
+  });
+  if (markerError) {
+    return fail("邀請已建立，但恢復狀態尚未確認；請以相同電子郵件重試。", 503);
   }
 
   const { error: attachError } = await admin.rpc("attach_pilot_owner_auth_user", {
