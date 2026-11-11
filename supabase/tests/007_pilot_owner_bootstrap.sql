@@ -50,10 +50,16 @@ begin
      or has_table_privilege('authenticated','public.tenant_membership_invites','DELETE') then
     raise exception 'Membership invite records must be inaccessible to browser roles';
   end if;
-  if has_table_privilege('authenticated','public.memberships','INSERT')
+  if has_table_privilege('anon','public.memberships','INSERT')
+     or has_table_privilege('anon','public.memberships','UPDATE')
+     or has_table_privilege('anon','public.memberships','DELETE')
+     or has_table_privilege('authenticated','public.memberships','INSERT')
      or has_table_privilege('authenticated','public.memberships','UPDATE')
-     or has_table_privilege('authenticated','public.memberships','DELETE') then
-    raise exception 'Browser roles must not mutate tenant memberships directly';
+     or has_table_privilege('authenticated','public.memberships','DELETE')
+     or has_table_privilege('service_role','public.memberships','INSERT')
+     or has_table_privilege('service_role','public.memberships','UPDATE')
+     or has_table_privilege('service_role','public.memberships','DELETE') then
+    raise exception 'Membership DML must be restricted to SECURITY DEFINER authorization RPCs';
   end if;
 
   perform set_config('request.jwt.claim.role','service_role',true);
