@@ -52,6 +52,11 @@ begin
   end if;
 
   if v_claim.completed_at is not null then
+    if v_claim.reservation_id = target_reservation_id
+       and v_claim.tenant_id = target_tenant_id
+       and v_claim.reserved_email = target_email then
+      return;
+    end if;
     raise exception 'pilot_owner_bootstrap_already_completed' using errcode = '55000';
   end if;
 
