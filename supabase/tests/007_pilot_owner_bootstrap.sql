@@ -110,15 +110,20 @@ begin
       and auth_user_id = v_user and completed_at is not null
   ) then raise exception 'Bootstrap reservation/finalization state was not persisted'; end if;
 
+  -- The exact same completed reservation is safe to retry; a different
+  -- reservation remains rejected and cannot trigger another Auth invite.
+  perform public.reserve_pilot_owner_bootstrap(
+    v_tenant,'pilot-owner-test@example.test','70000000-0000-4000-8000-000000000010'
+  );
   v_replay_rejected := false;
   begin
     perform public.reserve_pilot_owner_bootstrap(
-      v_tenant,'pilot-owner-test@example.test','70000000-0000-4000-8000-000000000010'
+      v_tenant,'attacker@example.test','70000000-0000-4000-8000-000000000012'
     );
   exception when sqlstate '55000' then
     v_replay_rejected := true;
   end;
-  if not v_replay_rejected then raise exception 'Completed bootstrap replay must be rejected'; end if;
+  if not v_replay_rejected then raise exception 'A different completed bootstrap reservation must be rejected'; end if;
 
   if exists (
     select 1 from public.memberships
