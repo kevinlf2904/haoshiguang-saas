@@ -142,10 +142,7 @@ begin
     where tenant_id = v_other_tenant and user_id = v_second_user
   ) then raise exception 'Replay created a cross-tenant owner membership'; end if;
 
-  -- Membership RPCs retain their legacy claim setup; their role checks are covered separately.
-  perform set_config('request.jwt.claim.role','service_role',true);
-  perform set_config('request.jwt.claims','',true);
-
+  -- Keep the claims-only service_role shape while exercising membership RPCs.
   -- Owner may grant a manager; the manager may only invite staff.
   perform public.grant_tenant_member_invite(
     v_tenant,v_second_user,'manager-bootstrap-test@example.test','manager',v_user
