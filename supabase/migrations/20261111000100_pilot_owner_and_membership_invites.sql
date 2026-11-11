@@ -49,7 +49,11 @@ as $$
 declare
   v_claim public.pilot_owner_bootstrap_state%rowtype;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  ) <> 'service_role' then
     raise exception 'service_role_required' using errcode = '42501';
   end if;
 
@@ -113,7 +117,11 @@ declare
   v_existing_member_role public.member_role;
   v_new_invite boolean := false;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  ) <> 'service_role' then
     raise exception 'service_role_required' using errcode = '42501';
   end if;
 
@@ -198,7 +206,11 @@ declare
   v_user_id uuid;
   v_target_role public.member_role;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  ) <> 'service_role' then
     raise exception 'service_role_required' using errcode = '42501';
   end if;
 
