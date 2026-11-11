@@ -199,6 +199,14 @@ begin
   end;
   if not v_owner_removal_rejected then raise exception 'Owner membership removal must require a transfer flow'; end if;
 
+  -- Leave the disposable database clean for the HTTP/Auth bootstrap integration test.
+  delete from public.tenant_membership_invites where tenant_id = v_tenant;
+  delete from public.memberships where tenant_id = v_tenant;
+  update public.pilot_owner_bootstrap_state
+  set tenant_id = null, completed_at = null, reservation_id = null,
+      reserved_email = null, reserved_at = null, auth_user_id = null
+  where singleton = true;
+
   raise notice 'PASS: one-time bootstrap, replay protection, browser privilege boundaries, owner/manager invite roles, tenant isolation, atomic removal, owner protection';
 end
 $$;
