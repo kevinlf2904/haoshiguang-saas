@@ -31,8 +31,10 @@ test("Pilot bootstrap HTTP/Auth integration is idempotent and binds one owner to
     headers: { "x-pilot-bootstrap-secret": bootstrapSecret },
     data: { email },
   });
+  const firstBody = await first.json();
+  console.log("PILOT_BOOTSTRAP_FIRST_RESPONSE", JSON.stringify({ status: first.status(), body: firstBody }));
   expect(first.status()).toBe(202);
-  expect((await first.json()).ok).toBe(true);
+  expect(firstBody.ok).toBe(true);
 
   const { data: usersAfterFirst, error: listFirstError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   expect(listFirstError).toBeNull();
