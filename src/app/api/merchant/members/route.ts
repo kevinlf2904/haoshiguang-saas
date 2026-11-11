@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
   }
 
   const marker = inviteMarker(body.tenantId, email, role);
-  let invitedUser;
+  let invitedUser: { id: string; app_metadata?: Record<string, unknown> | null } | null = null;
   try {
     invitedUser = await findPendingInviteUser(admin, email, marker);
   } catch {
