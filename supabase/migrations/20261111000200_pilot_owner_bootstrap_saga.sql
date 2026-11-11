@@ -7,6 +7,9 @@ alter table public.pilot_owner_bootstrap_state
   add column auth_user_id uuid references auth.users(id) on delete restrict;
 
 alter table public.pilot_owner_bootstrap_state
+  drop constraint pilot_owner_bootstrap_state_check;
+
+alter table public.pilot_owner_bootstrap_state
   add constraint pilot_owner_bootstrap_reservation_shape_check
   check (
     (reservation_id is null and reserved_email is null and reserved_at is null and auth_user_id is null and tenant_id is null and completed_at is null)
