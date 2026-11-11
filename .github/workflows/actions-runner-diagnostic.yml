@@ -1,0 +1,27 @@
+name: Temporary Actions runner diagnostic
+
+on:
+  push:
+    branches:
+      - feat/pilot-owner-and-member-invites
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-24:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Runner allocation probe
+        run: |
+          echo "runner-allocation-ok"
+          uname -a
+          node --version
+  ubuntu-latest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Runner allocation probe
+        run: |
+          echo "runner-allocation-ok"
+          uname -a
+          node --version
