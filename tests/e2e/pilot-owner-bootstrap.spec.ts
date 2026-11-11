@@ -61,8 +61,8 @@ test("Pilot bootstrap HTTP/Auth integration is idempotent and binds one owner to
     .from("memberships").select("id,tenant_id,user_id,role")
     .eq("tenant_id", tenantId).eq("user_id", firstUser!.id);
   expect(membershipRetryError).toBeNull();
-  expect(membershipsAfterRetry).toHaveLength(1);
-  expect(membershipsAfterRetry[0].role).toBe("owner");
+  expect(membershipsAfterRetry ?? []).toHaveLength(1);
+  expect(membershipsAfterRetry?.[0]?.role).toBe("owner");
 
   // A different email cannot take over a completed one-time bootstrap.
   const replay = await request.post("/api/merchant/bootstrap", {
