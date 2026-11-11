@@ -26,11 +26,20 @@ begin
   on conflict (slug) do update set name = excluded.name;
   select id into v_other_tenant from public.tenants where slug = 'bootstrap-isolation';
 
-  insert into auth.users(id) values (v_user), (v_second_user), (v_staff_user), (v_other_user)
-  on conflict (id) do nothing;
+  insert into auth.users(id,email) values
+    (v_user,'pilot-owner-test@example.test'),
+    (v_second_user,'manager-bootstrap-test@example.test'),
+    (v_staff_user,'staff-bootstrap-test@example.test'),
+    (v_other_user,'other-bootstrap-test@example.test')
+  on conflict (id) do update set email = excluded.email;
 
-  if has_function_privilege('anon','public.bootstrap_pilot_owner(uuid,uuid)','EXECUTE')
-     or has_function_privilege('authenticated','public.bootstrap_pilot_owner(uuid,uuid)','EXECUTE')
+  if has_function_privilege('anon','public.reserve_pilot_owner_bootstrap(uuid,text,uuid)','EXECUTE')
+     or has_function_privilege('authenticated','public.reserve_pilot_owner_bootstrap(uuid,text,uuid)','EXECUTE')
+     or has_function_privilege('anon','public.attach_pilot_owner_auth_user(uuid,uuid)','EXECUTE')
+     or has_function_privilege('authenticated','public.attach_pilot_owner_auth_user(uuid,uuid)','EXECUTE')
+     or has_function_privilege('anon','public.complete_pilot_owner_bootstrap(uuid)','EXECUTE')
+     or has_function_privilege('authenticated','public.complete_pilot_owner_bootstrap(uuid)','EXECUTE')
+     or to_regprocedure('public.bootstrap_pilot_owner(uuid,uuid)') is not null
      or has_function_privilege('anon','public.grant_tenant_member_invite(uuid,uuid,text,public.member_role,uuid)','EXECUTE')
      or has_function_privilege('authenticated','public.grant_tenant_member_invite(uuid,uuid,text,public.member_role,uuid)','EXECUTE')
      or has_function_privilege('anon','public.remove_tenant_member(uuid,uuid,uuid)','EXECUTE')
