@@ -44,9 +44,12 @@ async function findPendingInviteUser(
     const users = data.users ?? [];
     const match = users.find(user => user.email?.toLowerCase() === email);
     if (match) {
-      const userMarker = match.app_metadata?.[MEMBER_INVITE_MARKER]
-        ?? match.user_metadata?.[MEMBER_INVITE_MARKER];
-      return userMarker === marker ? match : null;
+      const appMarker = match.app_metadata?.[MEMBER_INVITE_MARKER];
+      // user_metadata is user-editable. It is only an acceptable recovery
+      // fallback when Auth proves this account was created by an invite.
+      const inviteMetadataMarker = match.user_metadata?.[MEMBER_INVITE_MARKER];
+      const trustedInviteFallback = Boolean(match.invited_at) && inviteMetadataMarker === marker;
+      return appMarker === marker || trustedInviteFallback ? match : null;
     }
     if (users.length < 1000) return null;
   }
@@ -160,8 +163,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Persist a server-controlled recovery marker as soon as Auth returns the user.
-  // user_metadata is also supplied at invite creation so a lost response can be
-  // reconciled; app_metadata survives user profile edits after the invite is accepted.
+  // The invite-time user_metadata fallback is accepted only when invited_at
+  // proves Auth created the account through its invitation flow.
   const { error: markerError } = await admin.auth.admin.updateUserById(invitedUser.id, {
     app_metadata: {
       ...(invitedUser.app_metadata || {}),
