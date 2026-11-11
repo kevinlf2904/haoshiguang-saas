@@ -60,7 +60,33 @@ begin
   end if;
 
   perform set_config('request.jwt.claim.role','service_role',true);
-  perform public.bootstrap_pilot_owner(v_tenant,v_user);
+
+  -- Reservation happens before Auth side effects and is idempotent for the
+  -- same email/claim ID. A different email cannot take over the reservation.
+  perform public.reserve_pilot_owner_bootstrap(
+    v_tenant,'pilot-owner-test@example.test','70000000-0000-4000-8000-000000000010'
+  );
+  perform public.reserve_pilot_owner_bootstrap(
+    v_tenant,'pilot-owner-test@example.test','70000000-0000-4000-8000-000000000010'
+  );
+
+  begin
+    perform public.reserve_pilot_owner_bootstrap(
+      v_other_tenant,'different-owner@example.test','70000000-0000-4000-8000-000000000011'
+    );
+  exception when sqlstate '55000' then
+    v_replay_rejected := true;
+  end;
+  if not v_replay_rejected then raise exception 'A competing bootstrap reservation must be rejected'; end if;
+
+  perform public.attach_pilot_owner_auth_user(
+    '70000000-0000-4000-8000-000000000010',v_user
+  );
+  perform public.attach_pilot_owner_auth_user(
+    '70000000-0000-4000-8000-000000000010',v_user
+  );
+  perform public.complete_pilot_owner_bootstrap('70000000-0000-4000-8000-000000000010');
+  perform public.complete_pilot_owner_bootstrap('70000000-0000-4000-8000-000000000010');
 
   if not exists (
     select 1 from public.memberships
@@ -69,15 +95,20 @@ begin
 
   if not exists (
     select 1 from public.pilot_owner_bootstrap_state
-    where singleton = true and tenant_id = v_tenant and completed_at is not null
-  ) then raise exception 'Bootstrap claim was not persisted'; end if;
+    where singleton = true and tenant_id = v_tenant
+      and reservation_id = '70000000-0000-4000-8000-000000000010'
+      and reserved_email = 'pilot-owner-test@example.test'
+      and auth_user_id = v_user and completed_at is not null
+  ) then raise exception 'Bootstrap reservation/finalization state was not persisted'; end if;
 
   begin
-    perform public.bootstrap_pilot_owner(v_other_tenant,v_second_user);
+    perform public.reserve_pilot_owner_bootstrap(
+      v_tenant,'pilot-owner-test@example.test','70000000-0000-4000-8000-000000000010'
+    );
   exception when sqlstate '55000' then
     v_replay_rejected := true;
   end;
-  if not v_replay_rejected then raise exception 'Bootstrap replay must be rejected'; end if;
+  if not v_replay_rejected then raise exception 'Completed bootstrap replay must be rejected'; end if;
 
   if exists (
     select 1 from public.memberships
