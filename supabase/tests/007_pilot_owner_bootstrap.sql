@@ -110,6 +110,7 @@ begin
       and auth_user_id = v_user and completed_at is not null
   ) then raise exception 'Bootstrap reservation/finalization state was not persisted'; end if;
 
+  v_replay_rejected := false;
   begin
     perform public.reserve_pilot_owner_bootstrap(
       v_tenant,'pilot-owner-test@example.test','70000000-0000-4000-8000-000000000010'
