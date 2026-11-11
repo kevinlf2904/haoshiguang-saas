@@ -187,3 +187,6 @@ comment on function public.attach_pilot_owner_auth_user(uuid,uuid) is
   'Attaches only the Auth user whose normalized email matches the reserved bootstrap email; idempotent for the same user.';
 comment on function public.complete_pilot_owner_bootstrap(uuid) is
   'Completes the reserved Pilot owner bootstrap transactionally and idempotently; never deletes Auth users on ambiguous outcomes.';
+
+-- Remove the pre-saga RPC so there is only one supported bootstrap path.
+drop function public.bootstrap_pilot_owner(uuid, uuid);
