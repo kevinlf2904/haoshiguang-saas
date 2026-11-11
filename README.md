@@ -28,7 +28,7 @@
 
 ## 店家帳號初始化與會員邀請
 
-第一位 Pilot 負責人只能透過 server-only bootstrap endpoint 初始化。必須在可信任伺服器環境設定 `PILOT_OWNER_BOOTSTRAP_TENANT_ID`（精確的 Pilot tenant UUID）及獨立高熵 `PILOT_OWNER_BOOTSTRAP_SECRET`（至少 32 bytes），再以 HTTPS 呼叫 `POST /api/merchant/bootstrap`，並在 `x-pilot-bootstrap-secret` header 提供該 secret、JSON body 提供負責人 email。資料庫以鎖定的 singleton claim 保證只成功一次；成功後立即移除兩個 bootstrap 環境變數。不要把 secret 放入 URL、前端程式、工單或日誌。
+第一位 Pilot 負責人只能透過 server-only bootstrap endpoint 初始化。必須在可信任伺服器環境設定 `PILOT_OWNER_BOOTSTRAP_TENANT_ID`（精確的 Pilot tenant UUID）及獨立高熵 `PILOT_OWNER_BOOTSTRAP_SECRET`（至少 32 bytes），再以 HTTPS 呼叫 `POST /api/merchant/bootstrap`，並在 `x-pilot-bootstrap-secret` header 提供該 secret、JSON body 提供負責人 email。資料庫會先以 singleton reservation 保留一次性初始化權，再建立 Auth 邀請；相同 email 的重試會沿用同一 reservation 並核對 Auth metadata，完成後才建立 owner membership。遇到網路結果不明時不會刪除 Auth user 或解除 reservation，避免誤刪已成功建立的負責人；應以相同 email 重試或由管理員核對狀態。成功後立即移除兩個 bootstrap 環境變數。不要把 secret 放入 URL、前端程式、工單或日誌。
 
 登入後，店家負責人可透過 `/api/merchant/members` 管理會員 API：owner 可邀請 manager/staff；manager 僅可邀請 staff。兩者可查看會員；owner 可移除 manager/staff，manager 僅可移除 staff。邀請紀錄以店家與 email 唯一化，重試會檢查並補齊既有會員權限，不重複建立邀請。一般邀請不允許授予 owner。負責人移轉目前不支援，必須另行設計安全的移轉流程。目前已提供店家後台會員管理頁面與 API。
 
