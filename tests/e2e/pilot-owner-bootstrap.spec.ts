@@ -32,7 +32,6 @@ test("Pilot bootstrap HTTP/Auth integration is idempotent and binds one owner to
     data: { email },
   });
   const firstBody = await first.json();
-  console.log("PILOT_BOOTSTRAP_FIRST_RESPONSE", JSON.stringify({ status: first.status(), body: firstBody }));
   expect(first.status()).toBe(202);
   expect(firstBody.ok).toBe(true);
 
