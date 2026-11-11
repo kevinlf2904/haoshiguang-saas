@@ -39,9 +39,12 @@ async function findReservedAuthUser(
     const users = data.users ?? [];
     const match = users.find((user) => user.email?.toLowerCase() === email);
     if (match) {
-      const reservationMarker = match.app_metadata?.[RESERVATION_METADATA_KEY]
-        ?? match.user_metadata?.[RESERVATION_METADATA_KEY];
-      return reservationMarker === expectedReservationId ? match : null;
+      const appMarker = match.app_metadata?.[RESERVATION_METADATA_KEY];
+      // user_metadata is user-editable. Accept it only when Auth confirms
+      // this account originated from the invitation flow.
+      const inviteMetadataMarker = match.user_metadata?.[RESERVATION_METADATA_KEY];
+      const trustedInviteFallback = Boolean(match.invited_at) && inviteMetadataMarker === expectedReservationId;
+      return appMarker === expectedReservationId || trustedInviteFallback ? match : null;
     }
     if (users.length < 1000) return null;
   }
@@ -108,7 +111,8 @@ export async function POST(request: NextRequest) {
 
   // Persist the recovery marker in server-controlled metadata. Keep the
   // invite-time user_metadata marker only as a fallback for a lost response
-  // before this server-side metadata update has completed.
+  // before this server-side metadata update has completed; reconciliation
+  // requires Auth's invited_at provenance before trusting that editable field.
   const { error: markerError } = await admin.auth.admin.updateUserById(authUser.id, {
     app_metadata: {
       ...(authUser.app_metadata || {}),
