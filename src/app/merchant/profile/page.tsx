@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import "./profile.css";
@@ -17,6 +17,7 @@ export default function MerchantProfilePage() {
   const router = useRouter();
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [tenantId, setTenantId] = useState("");
+  const tenantIdRef = useRef("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -33,8 +34,9 @@ export default function MerchantProfilePage() {
       if (!membershipResponse.ok) throw new Error(membershipResult.error || "無法讀取店家權限。");
       const items = membershipResult.memberships || [];
       setMemberships(items);
-      const selected = selectedTenantId || tenantId || items[0]?.tenant_id || "";
+      const selected = selectedTenantId || tenantIdRef.current || items[0]?.tenant_id || "";
       if (!selected) { setProfile(null); setTenantId(""); return; }
+      tenantIdRef.current = selected;
       setTenantId(selected);
       const response = await fetch("/api/merchant/profile?tenantId=" + encodeURIComponent(selected), { cache: "no-store" });
       const result = await response.json() as { profile?: Profile; canManage?: boolean; error?: string };
@@ -47,7 +49,7 @@ export default function MerchantProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [router, tenantId]);
+  }, [router]);
 
   useEffect(() => { void load(); }, [load]);
 
