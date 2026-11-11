@@ -91,6 +91,31 @@ test("會員 API/Auth 整合：權限邊界、邀請重試恢復、租戶隔離�
     });
     expect(invalidRole.status).toBe(400);
 
+    // A pre-existing account can edit user_metadata, so a predictable marker
+    // alone must never let it bypass the Auth invitation flow.
+    const preexistingEmail = `e2e-preexisting-${suffix}@haoshiguang.test`;
+    const preexistingMarker = createHash("sha256")
+      .update(`${tenantId}:member-invite:staff:${preexistingEmail}`)
+      .digest("hex");
+    const { data: preexisting, error: preexistingError } = await admin.auth.admin.createUser({
+      email: preexistingEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { [memberInviteMarker]: preexistingMarker },
+    });
+    expect(preexistingError).toBeNull();
+    expect(preexisting.user).toBeTruthy();
+    createdUserIds.push(preexisting.user!.id);
+
+    const preexistingInviteAttempt = await memberApi(page, "POST", "/api/merchant/members", {
+      tenantId, email: preexistingEmail, role: "staff",
+    });
+    expect(preexistingInviteAttempt.status).toBe(409);
+    const { data: preexistingMemberships, error: preexistingMembershipError } = await admin
+      .from("memberships").select("id").eq("tenant_id", tenantId).eq("user_id", preexisting.user!.id);
+    expect(preexistingMembershipError).toBeNull();
+    expect(preexistingMemberships).toHaveLength(0);
+
     // Simulate the recoverable partial-failure state: Auth invitation exists,
     // but the DB membership/invite transaction has not yet been confirmed.
     // A retry must adopt this exact tagged invite rather than create/delete users.
