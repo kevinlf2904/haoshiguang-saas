@@ -69,7 +69,9 @@ begin
     raise exception 'Browser roles must not mutate tenant memberships directly';
   end if;
 
-  perform set_config('request.jwt.claim.role','service_role',true);
+  -- Exercise the same claims-only shape supplied by current PostgREST requests.
+  perform set_config('request.jwt.claim.role','',true);
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
 
   -- Reservation happens before Auth side effects and is idempotent for the
   -- same email/claim ID. A different email cannot take over the reservation.
@@ -139,6 +141,10 @@ begin
     select 1 from public.memberships
     where tenant_id = v_other_tenant and user_id = v_second_user
   ) then raise exception 'Replay created a cross-tenant owner membership'; end if;
+
+  -- Membership RPCs retain their legacy claim setup; their role checks are covered separately.
+  perform set_config('request.jwt.claim.role','service_role',true);
+  perform set_config('request.jwt.claims','',true);
 
   -- Owner may grant a manager; the manager may only invite staff.
   perform public.grant_tenant_member_invite(
