@@ -45,6 +45,7 @@ test("會員 API/Auth 整合：權限邊界、邀請重試恢復、租戶隔離�
   const staffEmail = `e2e-staff-${suffix}@haoshiguang.test`;
   const password = "LocalOnly-Member-Password-2026!";
   const createdUserIds: string[] = [];
+  let otherTenantId: string | null = null;
 
   try {
     // Unauthenticated API calls must not reveal tenant membership data.
@@ -68,6 +69,19 @@ test("會員 API/Auth 整合：權限邊界、邀請重試恢復、租戶隔離�
     expect(outsiderCreateError).toBeNull();
     expect(outsiderCreated.user).toBeTruthy();
     createdUserIds.push(outsiderCreated.user!.id);
+
+    const { data: otherTenant, error: otherTenantError } = await admin.from("tenants").insert({
+      name: "Member isolation test tenant",
+      slug: `member-isolation-${suffix}`,
+      currency: "TWD",
+    }).select("id").single();
+    expect(otherTenantError).toBeNull();
+    expect(otherTenant).toBeTruthy();
+    otherTenantId = otherTenant!.id;
+    const { error: otherTenantMembershipError } = await admin.from("memberships").insert({
+      tenant_id: otherTenantId, user_id: outsiderCreated.user!.id, role: "staff",
+    });
+    expect(otherTenantMembershipError).toBeNull();
 
     await login(page, ownerEmail, ownerPassword);
 
@@ -188,8 +202,10 @@ test("會員 API/Auth 整合：權限邊界、邀請重試恢復、租戶隔離�
     const outsiderPage = await outsiderContext.newPage();
     try {
       await login(outsiderPage, outsiderEmail, password);
-      const outsiderRead = await memberApi(outsiderPage, "GET", `/api/merchant/members?tenantId=${tenantId}`);
-      expect(outsiderRead.status).toBe(403);
+      const outsiderOwnTenantRead = await memberApi(outsiderPage, "GET", `/api/merchant/members?tenantId=${otherTenantId}`);
+      expect(outsiderOwnTenantRead.status).toBe(403);
+      const outsiderCrossTenantRead = await memberApi(outsiderPage, "GET", `/api/merchant/members?tenantId=${tenantId}`);
+      expect(outsiderCrossTenantRead.status).toBe(403);
       const outsiderInvite = await memberApi(outsiderPage, "POST", "/api/merchant/members", {
         tenantId, email: `unauthorized-${suffix}@haoshiguang.test`, role: "staff",
       });
@@ -206,6 +222,7 @@ test("會員 API/Auth 整合：權限邊界、邀請重試恢復、租戶隔離�
     });
     expect(ownerRemoveManager.status).toBe(200);
   } finally {
+    if (otherTenantId) await admin.from("tenants").delete().eq("id", otherTenantId);
     for (const userId of [...new Set(createdUserIds)]) {
       await admin.auth.admin.deleteUser(userId);
     }
