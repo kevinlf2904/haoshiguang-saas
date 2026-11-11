@@ -34,7 +34,11 @@ as $$
 declare
   v_claim public.pilot_owner_bootstrap_state%rowtype;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  ) <> 'service_role' then
     raise exception 'service_role_required' using errcode = '42501';
   end if;
   if target_email is null or target_email <> lower(btrim(target_email)) or
@@ -103,7 +107,11 @@ declare
   v_claim public.pilot_owner_bootstrap_state%rowtype;
   v_auth_email text;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  ) <> 'service_role' then
     raise exception 'service_role_required' using errcode = '42501';
   end if;
 
@@ -140,7 +148,11 @@ as $$
 declare
   v_claim public.pilot_owner_bootstrap_state%rowtype;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+  if coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  ) <> 'service_role' then
     raise exception 'service_role_required' using errcode = '42501';
   end if;
 
