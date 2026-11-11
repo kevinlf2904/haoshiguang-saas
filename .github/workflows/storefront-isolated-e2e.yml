@@ -113,7 +113,7 @@ jobs:
       - name: Configure isolated Pilot bootstrap HTTP/Auth integration
         shell: bash
         run: |
-          PILOT_TENANT_ID="$(psql "$DB_URL" -Atqc "select id from public.tenants where slug = 'laozhang'")"
+          PILOT_TENANT_ID="$(psql "$DB_URL" -Atqc "select id from public.tenants where slug = 'bootstrap-isolation'")"
           test -n "$PILOT_TENANT_ID"
           {
             echo "PILOT_OWNER_BOOTSTRAP_TENANT_ID=$PILOT_TENANT_ID"
