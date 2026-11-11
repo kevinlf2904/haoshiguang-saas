@@ -1,4 +1,4 @@
--- Run after 20261111000100_pilot_owner_and_membership_invites.sql on disposable Supabase.
+-- Run after 20261111000200_pilot_owner_bootstrap_saga.sql on disposable Supabase.
 \set ON_ERROR_STOP on
 
 do $$
@@ -13,6 +13,7 @@ declare
   v_manager_membership uuid;
   v_owner_membership uuid;
   v_replay_rejected boolean := false;
+  v_wrong_email_rejected boolean := false;
   v_owner_removal_rejected boolean := false;
   v_manager_escalation_rejected boolean := false;
   v_manager_cross_tenant_rejected boolean := false;
@@ -87,6 +88,15 @@ begin
     v_replay_rejected := true;
   end;
   if not v_replay_rejected then raise exception 'A competing bootstrap reservation must be rejected'; end if;
+
+  begin
+    perform public.attach_pilot_owner_auth_user(
+      '70000000-0000-4000-8000-000000000010',v_other_user
+    );
+  exception when sqlstate '42501' then
+    v_wrong_email_rejected := true;
+  end;
+  if not v_wrong_email_rejected then raise exception 'Bootstrap must reject an Auth user with a different email'; end if;
 
   perform public.attach_pilot_owner_auth_user(
     '70000000-0000-4000-8000-000000000010',v_user
