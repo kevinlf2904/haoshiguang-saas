@@ -39,7 +39,14 @@ test("Pilot bootstrap HTTP/Auth integration is idempotent and binds one owner to
   expect(listFirstError).toBeNull();
   const firstUser = usersAfterFirst.users.find(user => user.email?.toLowerCase() === email);
   expect(firstUser).toBeTruthy();
-  expect(firstUser!.user_metadata?.pilot_owner_bootstrap_reservation).toBeTruthy();
+  expect(firstUser!.app_metadata?.pilot_owner_bootstrap_reservation).toBeTruthy();
+
+  // The user may edit user_metadata after accepting the invitation. Recovery
+  // must rely on the server-controlled app_metadata marker, not mutable profile data.
+  const { error: mutateUserMetadataError } = await admin.auth.admin.updateUserById(firstUser!.id, {
+    user_metadata: { pilot_owner_bootstrap_reservation: "user-controlled-tampered-value" },
+  });
+  expect(mutateUserMetadataError).toBeNull();
 
   const { data: firstMembership, error: firstMembershipError } = await admin
     .from("memberships").select("tenant_id,user_id,role")
