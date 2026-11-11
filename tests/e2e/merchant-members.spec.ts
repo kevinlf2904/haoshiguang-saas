@@ -16,7 +16,7 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel("電子郵件").fill(email);
   await page.getByLabel("密碼").fill(password);
   await page.getByRole("button", { name: "登入管理後台" }).click();
-  await expect(page).toHaveURL(/\\/merchant\\/orders$/);
+  await expect(page).toHaveURL(/\/merchant\/orders$/);
 }
 
 async function memberApi(page: Page, method: "GET" | "POST" | "DELETE", path: string, body?: unknown) {
