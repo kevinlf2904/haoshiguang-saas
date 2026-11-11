@@ -19,7 +19,8 @@ command -v psql >/dev/null 2>&1 || { echo "psql is required" >&2; exit 2; }
 
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
 create schema if not exists auth;
-create table if not exists auth.users (id uuid primary key);
+create table if not exists auth.users (id uuid primary key, email text);
+alter table auth.users add column if not exists email text;
 create or replace function auth.uid()
 returns uuid language sql stable
 as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
@@ -45,6 +46,7 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/202611100001
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110000200_public_order_tracking.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261110000300_order_retention_scheduler.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261111000100_pilot_owner_and_membership_invites.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261111000200_pilot_owner_bootstrap_saga.sql
 
 echo "Seeding pilot catalog..."
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed/001_laozhang_pilot.sql
