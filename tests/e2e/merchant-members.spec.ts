@@ -42,6 +42,7 @@ test("會員 API/Auth 整合：權限邊界、邀請重試恢復、租戶隔離�
   const managerEmail = `e2e-manager-${suffix}@haoshiguang.test`;
   const outsiderEmail = `e2e-outsider-${suffix}@haoshiguang.test`;
   const recoveryEmail = `e2e-recovery-${suffix}@haoshiguang.test`;
+  const ownerManagerEmail = `e2e-owner-manager-${suffix}@haoshiguang.test`;
   const staffEmail = `e2e-staff-${suffix}@haoshiguang.test`;
   const password = "LocalOnly-Member-Password-2026!";
   const createdUserIds: string[] = [];
@@ -140,6 +141,23 @@ test("會員 API/Auth 整合：權限邊界、邀請重試恢復、租戶隔離�
       tenantId, email: recoveryEmail, role: "manager",
     });
     expect(conflictingRole.status).toBe(409);
+
+    const ownerManagerInvite = await memberApi(page, "POST", "/api/merchant/members", {
+      tenantId, email: ownerManagerEmail, role: "manager",
+    });
+    expect(ownerManagerInvite.status).toBe(202);
+    const { data: ownerManagerInviteRow, error: ownerManagerInviteError } = await admin.from("tenant_membership_invites")
+      .select("user_id,role").eq("tenant_id", tenantId).eq("normalized_email", ownerManagerEmail).single();
+    expect(ownerManagerInviteError).toBeNull();
+    expect(ownerManagerInviteRow?.role).toBe("manager");
+    if (ownerManagerInviteRow?.user_id) createdUserIds.push(ownerManagerInviteRow.user_id);
+    const ownerManagerRetry = await memberApi(page, "POST", "/api/merchant/members", {
+      tenantId, email: ownerManagerEmail.toUpperCase(), role: "manager",
+    });
+    expect(ownerManagerRetry.status).toBe(202);
+    const { data: ownerManagerMemberships } = await admin.from("memberships").select("id")
+      .eq("tenant_id", tenantId).eq("user_id", ownerManagerInviteRow!.user_id);
+    expect(ownerManagerMemberships).toHaveLength(1);
 
     const ownerList = await memberApi(page, "GET", `/api/merchant/members?tenantId=${tenantId}`);
     expect(ownerList.status).toBe(200);
