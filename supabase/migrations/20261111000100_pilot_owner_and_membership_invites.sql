@@ -147,6 +147,13 @@ begin
     raise exception 'invite_auth_user_not_found' using errcode = 'P0002';
   end if;
 
+  -- SELECT FOR UPDATE cannot lock a row that does not exist. Serialize the
+  -- first invite for each tenant/email pair so concurrent retries observe the
+  -- committed invite instead of racing on the unique constraint.
+  perform pg_advisory_xact_lock(
+    hashtextextended(target_tenant_id::text || ':tenant-member-invite:' || target_email, 0)
+  );
+
   select * into v_existing_invite
   from public.tenant_membership_invites
   where tenant_id = target_tenant_id and normalized_email = target_email
