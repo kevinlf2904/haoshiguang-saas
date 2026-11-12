@@ -128,4 +128,64 @@ grep -q "store_unavailable" "$tmp/store-b.err" || {
 }
 psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 -c "update public.store_settings set is_accepting_orders=true where tenant_id=(select id from public.tenants where slug='laozhang')"
 
-echo "PASS: concurrent idempotency, catalog-price, and store-pause locking tests completed."
+
+echo "Testing concurrent tenant-member invitation idempotency..."
+invite_tenant="$(psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 -c "select id from public.tenants where slug='laozhang'")"
+invite_actor="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
+invite_target="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2"
+invite_email="concurrent-member-invite@example.test"
+psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 <<SQL
+delete from public.tenant_membership_invites where tenant_id='$invite_tenant' and user_id in ('$invite_actor','$invite_target');
+delete from public.memberships where tenant_id='$invite_tenant' and user_id in ('$invite_actor','$invite_target');
+delete from auth.users where id in ('$invite_actor','$invite_target');
+insert into auth.users(id,email) values
+  ('$invite_actor','concurrent-invite-owner@example.test'),
+  ('$invite_target','$invite_email');
+insert into public.memberships(tenant_id,user_id,role)
+values ('$invite_tenant','$invite_actor','owner');
+SQL
+(
+  psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 >"$tmp/member-invite-a.out" <<SQL
+begin;
+set request.jwt.claim.role = 'service_role';
+set request.jwt.claims = '{"role":"service_role"}';
+select public.grant_tenant_member_invite(
+  '$invite_tenant','$invite_target','$invite_email','staff','$invite_actor'
+);
+\! touch "$tmp/member-invite-ready"
+select pg_sleep(2);
+commit;
+SQL
+) &
+invite_pid=$!
+wait_for_file "$tmp/member-invite-ready"
+psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 >"$tmp/member-invite-b.out" <<SQL
+set request.jwt.claim.role = 'service_role';
+set request.jwt.claims = '{"role":"service_role"}';
+select public.grant_tenant_member_invite(
+  '$invite_tenant','$invite_target','$invite_email','staff','$invite_actor'
+);
+SQL
+wait "$invite_pid"
+node - "$tmp/member-invite-a.out" "$tmp/member-invite-b.out" <<'NODE'
+const fs = require("node:fs");
+const results = process.argv.slice(2).map((p) =>
+  fs.readFileSync(p, "utf8").trim().split("\n").filter(Boolean).at(-1)
+);
+if (results[0] !== "t" || results[1] !== "f") {
+  throw new Error("Expected concurrent invite results true/false, got " + results.join("/"));
+}
+NODE
+invite_rows="$(psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.tenant_membership_invites where tenant_id='$invite_tenant' and normalized_email='$invite_email'")"
+member_rows="$(psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.memberships where tenant_id='$invite_tenant' and user_id='$invite_target' and role='staff'")"
+[[ "$invite_rows" == "1" && "$member_rows" == "1" ]] || {
+  echo "Expected one invite and one membership, got invites=$invite_rows memberships=$member_rows" >&2
+  exit 1
+}
+psql "$TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 <<SQL
+delete from public.tenant_membership_invites where tenant_id='$invite_tenant' and user_id='$invite_target';
+delete from public.memberships where tenant_id='$invite_tenant' and user_id in ('$invite_actor','$invite_target');
+delete from auth.users where id in ('$invite_actor','$invite_target');
+SQL
+
+echo "PASS: concurrent idempotency, catalog-price, store-pause, and member-invite locking tests completed."
